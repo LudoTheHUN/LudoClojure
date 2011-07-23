@@ -1,0 +1,3 @@
+git commit -am "name of commit"
+git pull origin master
+git push origin master
