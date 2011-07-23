@@ -1,10 +1,24 @@
+# LudoClojure
+
 LudoClojure
 
 
-To get working from zero: 
+To get working from zero:
 Follow instruction here first
 https://github.com/citizen428/ClojureX
 Then...
 Set up 'lain', Down load it and place it here /usr/local/bin/ , give it executable permission 
 
 
+
+FIXME: write description
+
+## Usage
+
+FIXME: write
+
+## License
+
+Copyright (C) 2011 FIXME
+
+Distributed under the Eclipse Public License, the same as Clojure.
