@@ -9,16 +9,21 @@ https://github.com/citizen428/ClojureX
 Then...
 Set up 'lain', Down load it and place it here /usr/local/bin/ , give it executable permission 
 
+To use,  Run this:
+lein test
+lein uberjar
+java -jar LudoClojure-1.0.0-SNAPSHOT-standalone.jar
 
-
-FIXME: write description
+Findings:
+-main function needs to be at the end of the 
+.../src/LudoClojure/core.clj   else everything breaks...
 
 ## Usage
 
-FIXME: write
+Don't use it
 
 ## License
 
-Copyright (C) 2011 FIXME
+Copyright (C) 2011 LudoTheHUN
 
 Distributed under the Eclipse Public License, the same as Clojure.
