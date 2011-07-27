@@ -43,6 +43,18 @@
 (countingdown5 50000)
 (comment WIP this still fails)
 
+(defn miniloop [k]
+   (loop [n k]
+       (if (= n 1)
+           n
+           (do (println "hello fo" n)
+             (recur (dec n))))))
+           
+(miniloop 100)
+
+(comment Java interop)
+(. (. System (getProperties)) (get "os.name"))
+(. System (nanoTime))
 
 
 
