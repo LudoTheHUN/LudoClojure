@@ -41,6 +41,29 @@ gets the color oject for a pixel
                (File. "/home/ludo/Documents/cljoutfile.jpg"))
 
 
+;Grab a screen capture object (buffered image)
+(.createScreenCapture (Robot.)
+                 (Rectangle. 10 20 20 40)) 
+
+;Function that grabs a screen area
+(defn GrabScreen [x y xd yd]
+       (.createScreenCapture (Robot.)
+                 (Rectangle. x y xd yd)))
+
+
+(GrabScreen 10 20 30 40)  ;Returns a buffered image object
+
+(. (GrabScreen 10 20 30 40) getRGB 4 5)   ; grabs an RGB object based on the pixel
+
+;FAIL
+(. (GrabScreen 10 20 30 40) getRGB 4 5 7 9)
+;FAIL
+(TYPE_INT_ARGB  (. (GrabScreen 10 20 30 40) getRGB 4 5))
+;FAIL
+(.getPixelColor (GrabScreen 10 20 30 40) 5 9)
+
+
+
 
 
 
