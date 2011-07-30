@@ -1,6 +1,6 @@
 
 (comment Make Java move the mouse to x y location)
-(.mouseMove (java.awt.Robot.) 10 23)
+(.mouseMove (java.awt.Robot.) 10 203)
 
 (comment lets see how quickly this can itterate)
 
@@ -16,12 +16,20 @@
 (countingdown2 10)
 
 (comment this may make it fun to run off)
-(defn countingdown3 (fn [n]
+(def countingdown3 (fn [n]
                      (println n)
                      (Thread/sleep 1000) 
                      (.mouseMove (java.awt.Robot.) n n)
                      (countingdown3 (- n 1) )))
 (countingdown3 500)
+
+(def x 10)
+(def z 10)
+(+ x 1)
+
+(def y (fn [n] (+ n 1)))
+(def y1 (fn [n] (+ n 1)))
+(def y2 (fn [n] (+ n 1)))
 
 
 (defn countingdown4 [n]
@@ -40,6 +48,7 @@
                       (comment (Thread/sleep 1) 
                        (.mouseMove (java.awt.Robot.) n n))
                        (recur(countingdown5 (- n 1) ))))))
+                       
 (countingdown5 50000)
 (comment WIP this still fails)
 
@@ -51,6 +60,10 @@
              (recur (dec n))))))
            
 (miniloop 100)
+(miniloop 1000)
+(miniloop 10000)
+
+
 
 (comment Java interop)
 (. (. System (getProperties)) (get "os.name"))
