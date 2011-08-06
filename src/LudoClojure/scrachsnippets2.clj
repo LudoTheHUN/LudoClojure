@@ -17,9 +17,52 @@
 (defn GrabScreen [x y xd yd]
        (.createScreenCapture (Robot.)
                  (Rectangle. x y xd yd)))
+(defn GrabScreenColorJavaArray [x y xd yd]
+       (. (GrabScreen x y xd yd) getRGB 0 0 (- xd x) (- yd y) nil 0 (- xd x)))
+;(GranScreenColorJavaArray 0 0 100 100)   ;Note: could be made simpler by just 
+;pullig squares areas always
+;(GranScreenColorJavaArray 1 1 7 9)
+
+(defn myCLJarrayFromJavaArrayFun [JavaIntArray]
+      (let [JavaIntArray_Length (alength JavaIntArray)]
+      (loop [lengthdone 0 OutputClosureArray [] ]
+         (if (= lengthdone JavaIntArray_Length)
+            ;(do (println (alength JavaIntArray)) (println JavaIntArray_Length " foos " lengthdone "fiis" OutputClosureArray)  OutputClosureArray)
+              OutputClosureArray
+           (recur 
+             (inc lengthdone)  
+             ;(do (println (aget JavaIntArray lengthdone) " lendone " lengthdone) (conj OutputClosureArray (aget JavaIntArray lengthdone)  ))
+             (conj OutputClosureArray (aget JavaIntArray lengthdone))
+           )))))
+           
+;(myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  10 12 14 15))
+;(time (println (.length (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 50 50)))))
+         
+(defn loopsomethingntimes [somethingtobedone ntimes]
+        (loop [n 0]
+           (if (= n ntimes)
+           (println "done")
+           (do (eval somethingtobedone)
+               (recur (inc n))))))
+
+(def x 40)
+(def y 40)
+     
+(loopsomethingntimes 
+     '(time (do
+              (let [ImageArray (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y))]
+              (println (.length ImageArray)))))
+     100)
+
+
+;;TODO Get a visualisation of what's in a closure array... look at setRGB 
+;;TODO Will want to figure out concurency so we can push this to the background on a thread...
+   
+    
+
+
 ;create a java array and call it pixColourJavaArray
-(def pixColourJavaArray (. (GrabScreen 0 0 100 100) getRGB 0 0 100 100 nil 0 100))
-(def pixColourJavaArray (. (GrabScreen 0 0 10 10) getRGB 0 0 10 10 nil 0 10))
+
 
 
 
@@ -34,26 +77,24 @@
 
 (def testarray [12 234 65 :abc :abd])
 
-(defn myCLJarrayFromJavaArrayFun [JavaIntArray]
-      (let [JavaIntArray_Length (alength JavaIntArray)]
-      (loop [lengthdone 0 OutputClosureArray [] ]
-         (if (= lengthdone JavaIntArray_Length)
-            (do (println (alength JavaIntArray)) (println JavaIntArray_Length " foos " lengthdone "fiis" OutputClosureArray)
-            OutputClosureArray)
-           (recur 
-           
-             (inc lengthdone)  
-             (do
-              (println (aget JavaIntArray lengthdone) " lendone " lengthdone)
-              (conj OutputClosureArray (aget JavaIntArray lengthdone)  ))
-             
-           )))))
 
+           
 (def pixColourCLJArray (myCLJarrayFromJavaArrayFun pixColourJavaArray))
+
+
+;Test to see if these are the same
+(alength pixColourJavaArray)  ;Lenth of the Java array  ... this is really just a pointer to memory...
+(.length pixColourCLJArray)   ;Length of the CLJ array  ... a real closure array..
+
+
+
+
 pixColourCLJArray
 (type pixColourCLJArray)
 (pixColourCLJArray 1)
-
+(pixColourCLJArray 99)
+(pixColourCLJArray 100)
+(.length pixColourCLJArray)
 
 
 
@@ -157,7 +198,7 @@ gets the color oject for a pixel
 ;Create a graphixs object based on the buffered image
 (. (GrabScreen 10 20 30 40) createGraphics)
 ;fail
-(.getBlue (. (GrabScreen 10 20 30 40) getColorModel))
+(.getBlue (do (. (GrabScreen 10 20 30 40) getColorModel))
 
 
 
