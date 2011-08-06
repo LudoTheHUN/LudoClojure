@@ -1,6 +1,7 @@
 
 (ns LudoClojure.core
   (:require clojure.contrib.seq-utils)
+  (:require clojure.contrib.probabilities.random-numbers)  ;;gives lcg random stream generator
   (:gen-class))
 
 ;Java interop examples
@@ -12,12 +13,78 @@
         '(java.awt Color Graphics Graphics2D)
         )
 
-;Function for grabbing functions
+;Function for grabbing the screen
 (defn GrabScreen [x y xd yd]
        (.createScreenCapture (Robot.)
                  (Rectangle. x y xd yd)))
 ;create a java array and call it pixColourJavaArray
 (def pixColourJavaArray (. (GrabScreen 0 0 100 100) getRGB 0 0 100 100 nil 0 100))
+(def pixColourJavaArray (. (GrabScreen 0 0 10 10) getRGB 0 0 10 10 nil 0 10))
+
+
+
+(def factorial
+  (fn [n]
+    (loop [cnt n acc 1]
+       (if (zero? cnt)
+            acc
+          (recur (dec cnt) (* acc cnt))))))
+(factorial 10)  
+
+
+(def testarray [12 234 65 :abc :abd])
+
+(defn myCLJarrayFromJavaArrayFun [JavaIntArray]
+      (let [JavaIntArray_Length (alength JavaIntArray)]
+      (loop [lengthdone 0 OutputClosureArray [] ]
+         (if (= lengthdone JavaIntArray_Length)
+            (do (println (alength JavaIntArray)) (println JavaIntArray_Length " foos " lengthdone "fiis" OutputClosureArray)
+            OutputClosureArray)
+           (recur 
+           
+             (inc lengthdone)  
+             (do
+              (println (aget JavaIntArray lengthdone) " lendone " lengthdone)
+              (conj OutputClosureArray (aget JavaIntArray lengthdone)  ))
+             
+           )))))
+
+(def pixColourCLJArray (myCLJarrayFromJavaArrayFun pixColourJavaArray))
+pixColourCLJArray
+(type pixColourCLJArray)
+(pixColourCLJArray 1)
+
+
+
+
+      
+(. clojure.lang.Num (from (alength pixColourJavaArray)))
+(alength pixColourJavaArray)
+(aget pixColourJavaArray 1)
+
+
+(type
+((conj [] (aget pixColourJavaArray 1)) 0)
+)
+(type 1)
+
+(aget pixColourJavaArray 6)
+
+
+(testarray 1)
+(pixColourJavaArray 1)
+
+(aget testarray 1)
+(aget pixColourJavaArray 1)
+
+
+(pixColourJavaArray 1)
+
+
+
+
+(GrabScreen 10 20 30 40)
+
 
 
 
