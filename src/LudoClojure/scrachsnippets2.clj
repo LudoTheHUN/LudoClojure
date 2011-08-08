@@ -2,11 +2,12 @@
 (ns LudoClojure.core
   (:require clojure.contrib.seq-utils)
   (:require clojure.contrib.probabilities.random-numbers)  ;;gives lcg random stream generator
+  (:require clojure.contrib.duck-streams )
   (:gen-class))
 
 ;Java interop examples
 (import '(java.awt AWTException Robot Rectangle Toolkit)
-        '(java.io File IOException)
+        '(java.io File IOException PushbackReader FileReader)
         '(java.awt.Robot.)
         '(java.awt.image BufferedImage DirectColorModel PixelGrabber)
         '(javax.imageio ImageIO)
@@ -22,6 +23,12 @@
 ;(GranScreenColorJavaArray 0 0 100 100)   ;Note: could be made simpler by just 
 ;pullig squares areas always
 ;(GranScreenColorJavaArray 1 1 7 9)
+(defn SaveBufferedImage [x y xd yd]
+       (ImageIO/write (.createScreenCapture (Robot.)
+                 (Rectangle. x y xd yd))
+               "JPG"
+               (File. "/home/ludo/Documents/cljoutfile.jpg")))
+
 
 (defn myCLJarrayFromJavaArrayFun [JavaIntArray]
       (let [JavaIntArray_Length (alength JavaIntArray)]
@@ -45,23 +52,61 @@
            (do (eval somethingtobedone)
                (recur (inc n))))))
 
-(def x 40)
-(def y 40)
-     
+(def x 100)
+(def y 100)
+(def x 50)
+(def y 50)
+
+(SaveBufferedImage 100 50 x y)
+(myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y))
+
+
+
 (loopsomethingntimes 
      '(time (do
               (let [ImageArray (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y))]
               (println (.length ImageArray)))))
-     100)
+     10)
 
 
-;;TODO Get a visualisation of what's in a closure array... look at setRGB 
-;;TODO Will want to figure out concurency so we can push this to the background on a thread...
+;;TODO Get a visualisation of what's in a clj colour array... look at setRGB 
+;;TODO Look at ants example how to do things correctly....
+;;TODO Figure out concurency so we can push jobs (eg: image grabing) to the background on a thread...
    
-    
 
 
-;create a java array and call it pixColourJavaArray
+;;Serialization to disk
+;;;http://richhickey.github.com/clojure-contrib/duck-streams-api.html      
+;;Very bad that I had to add these dependencies and paths within these functons
+;;clojure.contrib.duck-streams/with-out-writer  
+;;'(java.io File IOException PushbackReader FileReader)
+(defn serialize
+  "Print a data structure to a file so that we may read it in later."
+  [data-structure #^String filename]
+  (clojure.contrib.duck-streams/with-out-writer
+    (java.io.File. filename)
+    (binding [*print-dup* true] (prn data-structure))))
+
+;; This allows us to then read in the structure at a later time, like so:
+(defn deserialize [filename]
+  (with-open [r (PushbackReader. (FileReader. filename))]
+    (read r)))
+
+;Testing Serialization and De-Serialization
+(serialize '(def y 50)  "/home/ludo/Documents/serializationTest2")
+(deserialize "/home/ludo/Documents/serializationTest")
+
+(def boo (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y)))
+(serialize boo "/home/ludo/Documents/serializationTest2")
+(def boo2 (deserialize "/home/ludo/Documents/serializationTest2"))
+
+(.size (distinct boo))
+(.size (distinct boo2))
+(type boo)
+(type boo2)
+
+
+
 
 
 
