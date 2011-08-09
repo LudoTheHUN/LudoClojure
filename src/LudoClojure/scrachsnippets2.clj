@@ -60,8 +60,6 @@
 (SaveBufferedImage 100 50 x y)
 (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y))
 
-
-
 (loopsomethingntimes 
      '(time (do
               (let [ImageArray (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y))]
@@ -71,39 +69,31 @@
 
 ;;TODO Get a visualisation of what's in a clj colour array... look at setRGB 
 ;;TODO Look at ants example how to do things correctly....
+
+
+
+
+
 ;;TODO Figure out concurency so we can push jobs (eg: image grabing) to the background on a thread...
    
-
-
-;;Serialization to disk
-;;;http://richhickey.github.com/clojure-contrib/duck-streams-api.html      
-;;Very bad that I had to add these dependencies and paths within these functons
-;;clojure.contrib.duck-streams/with-out-writer  
-;;'(java.io File IOException PushbackReader FileReader)
-(defn serialize
-  "Print a data structure to a file so that we may read it in later."
-  [data-structure #^String filename]
-  (clojure.contrib.duck-streams/with-out-writer
-    (java.io.File. filename)
-    (binding [*print-dup* true] (prn data-structure))))
-
-;; This allows us to then read in the structure at a later time, like so:
-(defn deserialize [filename]
-  (with-open [r (PushbackReader. (FileReader. filename))]
-    (read r)))
-
-;Testing Serialization and De-Serialization
-(serialize '(def y 50)  "/home/ludo/Documents/serializationTest2")
-(deserialize "/home/ludo/Documents/serializationTest")
-
-(def boo (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y)))
-(serialize boo "/home/ludo/Documents/serializationTest2")
-(def boo2 (deserialize "/home/ludo/Documents/serializationTest2"))
 
 (.size (distinct boo))
 (.size (distinct boo2))
 (type boo)
 (type boo2)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -219,6 +209,10 @@ gets the color oject for a pixel
 
 
 
+
+
+
+
 ;Grab a screen capture object (buffered image)
 (.createScreenCapture (Robot.)
                  (Rectangle. 10 20 20 40)) 
@@ -249,6 +243,9 @@ gets the color oject for a pixel
 
 
 
+
+
+
 ;RGB array from buffered image
 (GrabScreen 0 100 0 100)
 ;get a pixel values from the buffered image
@@ -257,6 +254,9 @@ gets the color oject for a pixel
 
 ;Colour value at a specific place
 (. (GrabScreen 1 1 100 100) getRGB 10 20 )
+
+
+
 
 
 ;;Java array of ints??
@@ -269,6 +269,9 @@ gets the color oject for a pixel
 (. (GrabScreen 0 0 100 100) getRGB 0 0 100 100 nil 0 100)
 ;how long does it take to grab these pixels.... 100ms for 600^2 area
 (time (alength (. (GrabScreen 0 0 600 600) getRGB 0 0 600 600 nil 0 600)))
+
+
+
 
 
 (time (def pixColourJavaArray (. (GrabScreen 0 0 100 100) getRGB 0 0 100 100 nil 0 100)))
@@ -298,12 +301,17 @@ gets the color oject for a pixel
 (first (frequencies pixColourJavaArray))
 
 
+
+
+
 (sort pixColourJavaArray)
 (sort (frequencies (sort pixColourJavaArray)))
 (take 10 pixColourJavaArray)
 (take 10 (frequencies pixColourJavaArray))
 (take 10 (frequencies (take 300 pixColourJavaArray)))
 (take-while (fn [x] (< x 1000)) pixColourJavaArray)
+
+
 
 (take-while (partial > 10) (iterate inc 0))
 ((partial + 10) 10)  ;partial returns a function that takes the f(fist arg) and ads the argumeten up to the call....
@@ -328,9 +336,6 @@ gets the color oject for a pixel
 
 
 
-
-
-
 ;Fail
 (. (. (GrabScreen 100 100 200 200) getRGB 99 99 ) getBlue)
 
@@ -342,9 +347,7 @@ gets the color oject for a pixel
 
 
 
-
 (. (GrabScreen 100 100 200 200) getRGB 45 45)
-
 
 
 
@@ -353,8 +356,6 @@ gets the color oject for a pixel
 (TYPE_INT_ARGB  (. (GrabScreen 10 20 30 40) getRGB 4 5))
 (.getPixelColor (GrabScreen 10 20 30 40) 5 9)
 (. (GrabScreen 1 1 100 100) getBlue 10 21 )
-
-
 
 
 
