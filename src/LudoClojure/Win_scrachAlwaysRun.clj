@@ -1,3 +1,13 @@
+
+;;To run in windows do something like:
+;;::#java -jar C:\LACIE_Copy\Clojure\clojure-1.2.1\clojure-1.2.1\clojure.jar
+;;::java.exe -cp "C:\LACIE_Copy\Clojure\clojure-1.2.1\clojure-1.2.1\clojure.jar;C:\LACIE_Copy\Clojure\clojure-contrib-1.2.0\target\clojure-contrib-1.2.0.jar" clojure.main
+;;java.exe -cp "C:\LACIE_Copy\Clojure\clojure-1.2.1\clojure-1.2.1\clojure.jar;C:\LACIE_Copy\Clojure\clojure-contrib-1.2.0\target\clojure-contrib-1.2.0.jar" clojure.main -i C:\Users\Ludo\Desktop\alwaysRun.clj -r
+
+
+
+
+
 (ns user
   (:use [clojure.contrib.math ]))
 (defn buildRandArraySafe [n array]
