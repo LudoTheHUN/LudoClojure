@@ -5,11 +5,10 @@
 ;;java.exe -cp "C:\LACIE_Copy\Clojure\clojure-1.2.1\clojure-1.2.1\clojure.jar;C:\LACIE_Copy\Clojure\clojure-contrib-1.2.0\target\clojure-contrib-1.2.0.jar" clojure.main -i C:\Users\Ludo\Desktop\alwaysRun.clj -r
 
 
-
-
-
-(ns user
+;;Note the namespace works better... just need to have the same napespace as the file.clj (when under lein), from the src/ and up, so need LudoCojure here because the's the subfolder
+(ns LudoClojure.Win_scrachAlwaysRun
   (:use [clojure.contrib.math ]))
+
 (defn buildRandArraySafe [n array]
   (loop [k n arrayGrow array]
     (if (= k 0)

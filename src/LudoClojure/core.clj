@@ -1,4 +1,5 @@
 (ns LudoClojure.core
+  (:use LudoClojure.Win_scrachAlwaysRun)
   (:gen-class))
 
 
@@ -12,7 +13,7 @@
 
 
 (defn -main [& args]
-  (println "you people dont make it easy to get started with programming")
+  (println "Its not easy enough to get started with Clojure programming")
 (println (hello args))
 )
 

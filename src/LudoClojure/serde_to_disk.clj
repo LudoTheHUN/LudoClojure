@@ -20,7 +20,7 @@
 ;;Serialization to disk
 ;;;http://richhickey.github.com/clojure-contrib/duck-streams-api.html      
 ;;Very bad that I had to add these dependencies and paths within these functons
-;;clojure.contrib.duck-streams/with-out-writer  
+;;clojure.contrib.duck-streams/with-out-writer    (maybe it's possible not to have to do so)
 ;;'(java.io File IOException PushbackReader FileReader)
 (defn serialize
   "Print a data structure to a file so that we may read it in later."
@@ -39,6 +39,9 @@
 (deserialize "/home/ludo/Documents/serializationTest")
 
 (def boo (myCLJarrayFromJavaArrayFun  (GrabScreenColorJavaArray  0 0 x y)))
-(serialize boo "/home/ludo/Documents/serializationTest2")
-(def boo2 (deserialize "/home/ludo/Documents/serializationTest2"))
+(serialize boo "/home/ludo/Documents/serializationTest2.sclj")
+(def boo2 (deserialize "/home/ludo/Documents/serializationTest2.sclj"))
+;"/home/jerzy/Dokumenty/serializationTest2.sclj"
+;"/home/ludo/Documents/serializationTest2.sclj"
+
 
