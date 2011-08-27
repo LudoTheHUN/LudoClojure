@@ -285,3 +285,6 @@
 ;;TODO Add a jpanel to see neurons...
 
 
+;;TODO consider liquid computing:  http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.131.277&rep=rep1&type=pdf
+
+
