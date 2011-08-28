@@ -1,0 +1,22 @@
+
+http://www.thebigblob.com/getting-started-with-opencl-and-gpu-computing/
+
+
+find / -print | grep libjsig.so
+
+/usr/lib/jvm/java-6-openjdk/jre/lib/amd64/
+
+
+setenv LD_PRELOAD /usr/lib/jvm/java-6-openjdk/jre/lib/amd64/libjsig.so
+
+set LD_PRELOAD /usr/lib/jvm/java-6-openjdk/jre/lib/amd64/libjsig.so
+
+
+
+
+libOpenCL.so
+
+
+
+find / -print | grep libOpenCL.so
+
