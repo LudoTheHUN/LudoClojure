@@ -561,7 +561,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops10    -may buffers, postional access based on ints in another buffer
+;;;;; Iteration loops11    -may buffers, postional access based on ints in another buffer
 ;;Difficult getting a single int out... maybe an array of floats denoting different outputs?  OK!!
 ;;NOTE: any mixing of datatypes can be silently catastrophic!
 ;;NOTE: this is very inneficent (positonvalout array outputs are computed 4 times for the same set of numbers...)
@@ -608,15 +608,63 @@
 @OpenCLoutputAtom1
 @OpenCLoutputAtom2
 
+)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops12    -CL like itteration within kernel, interkernel 'spin', 
+(quote 
+
+(def sourceOpenCL2
+  "
+  __kernel void testingbuffers (
+       __global float *a,
+       __global float *b,
+	   __global int *inta,
+	   int positon,
+	   __global int *positonvalout
+	   ) {
+    int gid = get_global_id(0);
+	int lsize = get_local_size(0);  
+	int lid = get_local_id(0);
+	
+	float foo = 1.0;
+    b[gid] = a[gid] + foo;
+	positonvalout[0] =  inta[positon];
+	positonvalout[1]  =  inta[0] + inta[1] + 5;
+	positonvalout[2]  = gid ;
+	positonvalout[3]  = lsize ;
+	positonvalout[4]  = lid;
+  }
+  ")
+  
+(def OpenCLoutputAtom1 (atom 0))
+(def OpenCLoutputAtom2 (atom 0))
+
+(with-cl
+  (with-program (compile-program sourceOpenCL2)
+    (let [a (wrap [1.011 11.5 12.4 5.0001] :float32)
+          b (mimic a)
+		  inta (wrap [8 7 3 4 7 3 1 2] :int32)
+		  positon 0
+		  positonvalout (wrap [0 0 0 0 0 0 0] :int32)
+		  ]
+      (enqueue-kernel :testingbuffers 4 a b inta positon positonvalout)
+      (swap! OpenCLoutputAtom1 (fn [x] (deref (enqueue-read b))))
+	  (swap! OpenCLoutputAtom2 (fn [x] (deref (enqueue-read positonvalout))))
+	nil)))
+@OpenCLoutputAtom1
+@OpenCLoutputAtom2
 
 	  
 ;;TODO 
-;Test may kernels
-;many buffers
-;passing buffers between kernels 
-;iteration within a kernel
-;lookup int position in one buffer to find value in another buffer
+;OK Test may kernels
+;OK many buffers
+;OK passing buffers between kernels 
+;OK lookup int position in one buffer to find value in another buffer
+;iteration within a kernel (C like loops)
+;logicals within a kernel  (C if statements?)
 ;;TODO optimisation with 	 --  int lsize = get_local_size(0);  --  int lid = get_local_id(0);
 
 
