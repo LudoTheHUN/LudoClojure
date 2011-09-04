@@ -393,7 +393,7 @@
 
 ;Benchmarks
 (println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (bigint (/ (* InnerLoopCount sizeOfarray 2) 1.4))) 
-(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (bigint (/ (* InnerLoopCount sizeOfarray 2) 6))) 
+(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (bigint (/ (* InnerLoopCount sizeOfarray 2) 160))) 
 
 
 (count LaRandomFloatVec)
@@ -445,8 +445,8 @@
 						;(wait-for (enqueue-kernel :square sizeOfarray (wrap @LaRandomFloatVecAtom :int32) b))   ;;DEMO OF LOADING IN AN ARRAY FROM THE 'OUTSIDE', this could be in a (let []...) that would cover a whole block
 						(wait-for (enqueue-kernel :square sizeOfarray a b))
 						(enqueue-barrier)
-						;(wait-for (enqueue-kernel :square sizeOfarray b a))
-						;(enqueue-barrier)
+						(wait-for (enqueue-kernel :square sizeOfarray b a))
+						(enqueue-barrier)
 						
                 (if (= k 1)
 				
@@ -467,14 +467,16 @@
       (println "Done Work")
       (recur (dec k) ))))
 
-(def InnerLoopCount 1000)
-(def sizeOfarray 1000000)
+(def InnerLoopCount 5000)
+(def sizeOfarray 10000000)
 (buildDatatoWorkWith sizeOfarray)
 (SafeLoop 10 RunOneOpenCL_uberloop InnerLoopCount sizeOfarray)
 
 ;Benchmarks
 (println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (bigint (/ (* InnerLoopCount sizeOfarray 2) 1.4))) 
-(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 0.6) ) 1000000000.0) "Billion")  ;5.8B
+(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 160) ) 1000000000.0) "Billion")  ;5.8B , 6.25Bi
+(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 14) ) 1000000000.0) "Billion")  ;5.8B , 6.25Bi , 7.1B 10MArray
+
 
 
 
@@ -486,14 +488,16 @@
 
 (def sourceOpenCL
   "__kernel void square (
-       __global int *a,
-       __global int *b) {
+       __global float *a,
+       __global float *b
+	   ) {
     int gid = get_global_id(0);
-    b[gid] = a[gid] + gid;
+	float foo = 1.0;
+    b[gid] = a[gid] + foo;
   }")
 
 
-(def ArrayToPass (atom [12 34 45 67]))
+(def ArrayToPass (atom [12.0 34.0 45.0 67.0]))
 
 (with-cl
   (with-program (compile-program sourceOpenCL)
@@ -502,13 +506,118 @@
       ;(enqueue-kernel :square 4 a b)
 	  (enqueue-kernel :square 4 (wrap @ArrayToPass :float32) b)
       (enqueue-read b))))
+	  
+(with-cl
+  (with-program (compile-program sourceOpenCL)
+    (let [a (wrap [1.011 11 12 5] :float32)
+          b (mimic a)]
+      ;(enqueue-kernel :square 4 a b)
+	  (enqueue-kernel :square 4 a b)
+      (enqueue-read b))))
 
+
+	  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops10    -meny kernels?   : OK for many kernels as per this demo
+(quote 
+  
+(def sourceOpenCL2
+  "
+  __kernel void square (
+       __global float *a,
+       __global float *b
+	   ) {
+    int gid = get_global_id(0);
+	float foo = 1.0;
+    b[gid] = a[gid] + foo;
+  }
+
+  __kernel void square2 (
+       __global float *a,
+       __global float *b
+	   ) {
+    int gid = get_global_id(0);
+	float foo = 2.0;
+    b[gid] = a[gid] * foo;
+  }
+  ")
+
+(def ArrayToPass (atom [12.0 34.0 45.0 67.0]))
+
+(with-cl
+  (with-program (compile-program sourceOpenCL2)
+    (let [a (wrap [1.011 11 12 5] :float32)
+          b (mimic a)]
+	  (enqueue-kernel :square 4 (wrap @ArrayToPass :float32) b)
+	  (enqueue-kernel :square 4 b a)
+	  ;; sequential work makes the buffer persists, but barriers are likely needed for paralelisim safety. 
+      (enqueue-read a))))
+	    
+)
+		
+		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops10    -may buffers, postional access based on ints in another buffer
+;;Difficult getting a single int out... maybe an array of floats denoting different outputs?  OK!!
+;;NOTE: any mixing of datatypes can be silently catastrophic!
+;;NOTE: this is very inneficent (positonvalout array outputs are computed 4 times for the same set of numbers...)
+(quote 
+
+(def sourceOpenCL2
+  "
+  __kernel void testingbuffers (
+       __global float *a,
+       __global float *b,
+	   __global int *inta,
+	   int positon,
+	   __global int *positonvalout
+	   ) {
+    int gid = get_global_id(0);
+	int lsize = get_local_size(0);  
+	int lid = get_local_id(0);
+	
+	float foo = 1.0;
+    b[gid] = a[gid] + foo;
+	positonvalout[0] =  inta[positon];
+	positonvalout[1]  =  inta[0] + inta[1] + 5;
+	positonvalout[2]  = gid ;
+	positonvalout[3]  = lsize ;
+	positonvalout[4]  = lid;
+  }
+  ")
+  
+(def OpenCLoutputAtom1 (atom 0))
+(def OpenCLoutputAtom2 (atom 0))
+
+(with-cl
+  (with-program (compile-program sourceOpenCL2)
+    (let [a (wrap [1.011 11.5 12.4 5.0001] :float32)
+          b (mimic a)
+		  inta (wrap [8 7 3 4 7 3 1 2] :int32)
+		  positon 0
+		  positonvalout (wrap [0 0 0 0 0 0 0] :int32)
+		  ]
+      (enqueue-kernel :testingbuffers 4 a b inta positon positonvalout)
+      (swap! OpenCLoutputAtom1 (fn [x] (deref (enqueue-read b))))
+	  (swap! OpenCLoutputAtom2 (fn [x] (deref (enqueue-read positonvalout))))
+	nil)))
+@OpenCLoutputAtom1
+@OpenCLoutputAtom2
+
+
+
+	  
 ;;TODO 
 ;Test may kernels
 ;many buffers
 ;passing buffers between kernels 
 ;iteration within a kernel
 ;lookup int position in one buffer to find value in another buffer
+;;TODO optimisation with 	 --  int lsize = get_local_size(0);  --  int lid = get_local_id(0);
 
 
 
