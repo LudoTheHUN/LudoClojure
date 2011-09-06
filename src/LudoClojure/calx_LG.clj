@@ -436,7 +436,7 @@
 (defn RunOneOpenCL_uberloop [InnerLoopCount sizeOfarray] 
  (println "starting")
  (time 
- (with-cl
+ (with-cl ;with-cl
   (with-program (compile-program sourceOpenCL)
     (let [a (wrap LaRandomFloatVec :int32)
           b (mimic a)]
@@ -467,16 +467,88 @@
       (println "Done Work")
       (recur (dec k) ))))
 
-(def InnerLoopCount 5000)
-(def sizeOfarray 10000000)
+(def InnerLoopCount 10)
+(def sizeOfarray 1000000)
 (buildDatatoWorkWith sizeOfarray)
 (SafeLoop 10 RunOneOpenCL_uberloop InnerLoopCount sizeOfarray)
 
 ;Benchmarks
 (println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (bigint (/ (* InnerLoopCount sizeOfarray 2) 1.4))) 
 (println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 160) ) 1000000000.0) "Billion")  ;5.8B , 6.25Bi
-(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 14) ) 1000000000.0) "Billion")  ;5.8B , 6.25Bi , 7.1B 10MArray
+(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 0.013) ) 1000000000.0) "Billion")  ;5.8B , 6.25Bi , 7.1B 10MArray 
 
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops8.1   Lazy onloading...
+(quote 
+
+(def sourceOpenCL
+  "__kernel void square (
+       __global int *a,
+       __global int *b) {
+    int gid = get_global_id(0);
+    b[gid] = a[gid] + gid;
+  }")
+
+(defn buildDatatoWorkWith [sizeOfarrayf]
+ (def largelist (for [i (range sizeOfarrayf)] 1))
+ (def LaRandomFloatVec (vec largelist))
+ (def LaRandomFloatVecAtom (atom LaRandomFloatVec))
+ (def myFooAtom1 (atom 0))
+ (def myFooAtom2 (atom 0)))
+
+ (def largelistLazyOnload (atom (vec (for [i (range 10000000)] 1) )))   ;; This defines a large lazy sequence
+ ;;what if the input and the output are the same (atom) large vecotor
+ 
+(defn RunOneOpenCL_uberloop [InnerLoopCount sizeOfarray] 
+ (println "starting")
+ (time 
+ (with-cl ;with-cl
+  (with-program (compile-program sourceOpenCL)
+    (let [a (wrap (deref largelistLazyOnload) :int32)   ;largelistLazyOnload can be a lazy sequence, however wrap will still hit ram... this has to be a vec
+          b (mimic a)]
+	  
+	  (time   (loop [k InnerLoopCount]
+						;(wait-for (enqueue-kernel :square sizeOfarray (wrap @LaRandomFloatVecAtom :int32) b))   ;;DEMO OF LOADING IN AN ARRAY FROM THE 'OUTSIDE', this could be in a (let []...) that would cover a whole block
+						(wait-for (enqueue-kernel :square sizeOfarray a b))
+						(enqueue-barrier)
+						(wait-for (enqueue-kernel :square sizeOfarray b a))
+						(enqueue-barrier)
+						
+							  (release! a)
+	                          (release! b)
+                (if (= k 1)
+				
+                nil
+                (recur (dec k) ))))     ;have feeling this is stack overflowing... need to use loop recur?
+	  (release! a)
+	  (release! b)	  
+	  ;(swap! myFooAtom2 (fn [x] (enqueue-read b)))
+	  (time (swap! largelistLazyOnload (fn [x] (deref (enqueue-read b)))))    ;;(enqueue-read b) NEEDS to be deref'ed to release memory...
+	  nil)))))
+;;RunOneOpenCL_uberloop
+;(RunOneOpenCL_uberloop)
+
+(defn SafeLoop [n functionToCall Isize asize]
+  (loop [k n]
+    (functionToCall Isize asize)
+    (if (= k 1)
+      (println "Done Work")
+      (recur (dec k) ))))
+
+(def InnerLoopCount 100)
+(def sizeOfarray 10000000)
+;;(buildDatatoWorkWith sizeOfarray)
+(SafeLoop 20 RunOneOpenCL_uberloop InnerLoopCount sizeOfarray)
+
+;Benchmarks
+(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (bigint (/ (* InnerLoopCount sizeOfarray 2) 1.4))) 
+(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 160) ) 1000000000.0) "Billion")  ;5.8B , 6.25Bi
+(println "InnerLoops:" InnerLoopCount " SizeOfArray: "sizeOfarray  " OpsPerSecond was: " (/ (bigint (/ (* InnerLoopCount sizeOfarray 2) 0.013) ) 1000000000.0) "Billion")  ;5.8B , 6.25Bi , 7.1B 10MArray 
 
 
 
@@ -614,6 +686,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;; Iteration loops12    -CL like itteration within kernel, interkernel 'spin', 
+;;Optimisation oportunity, global device memory read is 'expensive'.... (mac reseach CL episode6, 14:00+)
+;;Notes towards mdh_opt.cl file - episde 6 source.
+;;..so use shared memory... 16kb of shared memory per SM??
+;;5 blocks *64 elements *floats size = 1280bytes...   (float is thus 4bytes)
+;;1280bytes per work group.
+;; lid is 0 to 63 inclusive.
+;; top level itteration is in groupings of 64 (lsize)... as in for( iatom = 0; iatom < natoms; iatom+=lsize )
+;;whole point is to two coelesed load from memory....
+;;no guarantees as the what different threads have done already /yet. Hence neen a barier to get everyone on the same page
+;;might not get a correct answer without the loc!
+;;it's all about lots of global calls vs local calls which are faster?
+;;bank conflict??
+;;Hardware will need to context switch as some points ,
+;; ...so the shared memory may start to beoverwriten by the second half warp, distroying what the slower(say) worp one still needs to be consistant (effectively the shared data will be out of sink over the top level loop)
+;;will need to pad out to power of 2 sizes?
+;;Seems this shared memory thing is high ovearhead? 
 (quote 
 
 (def sourceOpenCL2
@@ -625,39 +713,122 @@
 	   int positon,
 	   __global int *positonvalout
 	   ) {
-    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+	int gid   = get_global_id(0);
 	int lsize = get_local_size(0);  
-	int lid = get_local_id(0);
+	int lid   = get_local_id(0);  //FOO testing commenting
 	
 	float foo = 1.0;
     b[gid] = a[gid] + foo;
-	positonvalout[0] =  inta[positon];
-	positonvalout[1]  =  inta[0] + inta[1] + 5;
-	positonvalout[2]  = gid ;
-	positonvalout[3]  = lsize ;
-	positonvalout[4]  = lid;
+	positonvalout[gid ]  = inta[positon];
+	positonvalout[gid + gsize]  = inta[0] + inta[1] + 5;
+	positonvalout[gid + gsize * 2]  = gid ;
+	positonvalout[gid + gsize * 3]  = lsize ;
+	positonvalout[gid + gsize * 4]  = lid;
+	positonvalout[gid + gsize * 5]  = gsize;
+	///// barrier(CLK_LOCAL_MEM_FENCE);
   }
   ")
   
 (def OpenCLoutputAtom1 (atom 0))
 (def OpenCLoutputAtom2 (atom 0))
+(def OpenCLoutputAtom3 (atom 0))
+(def OpenCLoutputAtom4 (atom 0))
+(def OpenCLoutputAtom5 (atom 0))
+
 
 (with-cl
   (with-program (compile-program sourceOpenCL2)
     (let [a (wrap [1.011 11.5 12.4 5.0001] :float32)
           b (mimic a)
 		  inta (wrap [8 7 3 4 7 3 1 2] :int32)
-		  positon 0
-		  positonvalout (wrap [0 0 0 0 0 0 0] :int32)
+		  positon 1
+		  positonvalout (wrap [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] :int32)
+		  globalsize 4
+		  localsize 4
 		  ]
-      (enqueue-kernel :testingbuffers 4 a b inta positon positonvalout)
-      (swap! OpenCLoutputAtom1 (fn [x] (deref (enqueue-read b))))
-	  (swap! OpenCLoutputAtom2 (fn [x] (deref (enqueue-read positonvalout))))
+	  (local 2)
+      ;(enqueue-kernel :testingbuffers globalsize a b inta positon positonvalout)
+	  (wait-for (enqueue-kernel :testingbuffers globalsize  a b inta positon positonvalout))
+	  (enqueue-barrier)
+      (swap! OpenCLoutputAtom1 (fn [x] (deref (enqueue-read a))))
+	  (swap! OpenCLoutputAtom2 (fn [x] (deref (enqueue-read b))))
+	  ;(swap! OpenCLoutputAtom3 (fn [x] (deref (enqueue-read inta))))
+	  ;(swap! OpenCLoutputAtom4 (fn [x] (deref (enqueue-read positon))))
+	  (swap! OpenCLoutputAtom5 (fn [x] (deref (enqueue-read positonvalout))))
 	nil)))
 @OpenCLoutputAtom1
 @OpenCLoutputAtom2
+@OpenCLoutputAtom5
 
-	  
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops13  local sizes...   ;set at 256 , no clear way to change... asked here: https://github.com/ztellman/calx/issues/3
+(quote 
+
+(def sourceOpenCL2
+  "
+  __kernel void testingbuffers (
+       __global float *a,
+       __global float *b,
+	   __global int *inta,
+	   int positon,
+	   __global int *positonvalout
+	   ) {
+    int gsize = get_global_size(0);
+	int gid   = get_global_id(0);
+	int lsize = get_local_size(0);  
+	int lid   = get_local_id(0);  //FOO testing commenting
+	
+	float foo = 1.0;
+    b[gid] = a[gid] + foo;
+	  positonvalout[gid]  = lid ;
+	//positonvalout[gid ]  = inta[positon];
+	//positonvalout[gid + gsize]  = inta[0] + inta[1] + 5;
+	//positonvalout[gid + gsize * 2]  = gid ;
+	//positonvalout[gid + gsize * 3]  = lsize ;
+	//positonvalout[gid + gsize * 4]  = lid;
+	//positonvalout[gid + gsize * 5]  = gsize;
+	////// barrier(CLK_LOCAL_MEM_FENCE);
+  }
+  ")
+  
+(def OpenCLoutputAtom1 (atom 0))
+(def OpenCLoutputAtom2 (atom 0))
+(def OpenCLoutputAtom3 (atom 0))
+(def OpenCLoutputAtom4 (atom 0))
+(def OpenCLoutputAtom5 (atom 0))
+
+(with-cl
+  (with-program (compile-program sourceOpenCL2)
+    (let [a (wrap (vec (for [i (range 1028)] (rand))) :float32)
+          b (mimic a)
+		  inta (wrap (vec (for [i (range 1028)] 1)) :int32)
+		  positon 1
+		  positonvalout (mimic inta)
+		  globalsize 1028
+		  ]
+      ;(enqueue-kernel :testingbuffers globalsize a b inta positon positonvalout)
+	  (local 8)
+	  (wait-for (enqueue-kernel :testingbuffers globalsize a b inta positon positonvalout))
+	  (enqueue-barrier)
+      (swap! OpenCLoutputAtom1 (fn [x] (deref (enqueue-read a))))
+	  (swap! OpenCLoutputAtom2 (fn [x] (deref (enqueue-read b))))
+	  ;(swap! OpenCLoutputAtom3 (fn [x] (deref (enqueue-read inta))))
+	  ;(swap! OpenCLoutputAtom4 (fn [x] (deref (enqueue-read positon))))
+	  (swap! OpenCLoutputAtom5 (fn [x] (deref (enqueue-read positonvalout))))
+	nil)))
+@OpenCLoutputAtom1
+@OpenCLoutputAtom2
+@OpenCLoutputAtom5
+
+
+
+  
 ;;TODO 
 ;OK Test may kernels
 ;OK many buffers
