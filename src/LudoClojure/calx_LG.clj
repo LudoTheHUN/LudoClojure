@@ -777,7 +777,8 @@
        __global float *b,
 	   __global int *inta,
 	   int positon,
-	   __global int *positonvalout
+	   __global int *positonvalout,
+	   __local int *local_memtemp
 	   ) {
     int gsize = get_global_size(0);
 	int gid   = get_global_id(0);
@@ -813,8 +814,7 @@
 		  globalsize 1028
 		  ]
       ;(enqueue-kernel :testingbuffers globalsize a b inta positon positonvalout)
-	  (local 8)
-	  (wait-for (enqueue-kernel :testingbuffers globalsize a b inta positon positonvalout))
+	  (wait-for (enqueue-kernel :testingbuffers globalsize a b inta positon positonvalout (local 64)))
 	  (enqueue-barrier)
       (swap! OpenCLoutputAtom1 (fn [x] (deref (enqueue-read a))))
 	  (swap! OpenCLoutputAtom2 (fn [x] (deref (enqueue-read b))))
@@ -827,19 +827,130 @@
 @OpenCLoutputAtom5
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops13.1  local sizes...   ;set at 256 , no clear way to change... asked here: https://github.com/ztellman/calx/issues/3
+(quote 
 
+(def sourceOpenCL2
+  " 
+__kernel void square(
+    __global float *input,
+    __global float *output,
+    const unsigned int count)
+{
+    int i = get_global_id(0);
+    if (i < count)
+        output[i] = input[i] * input[i];
+}
   
+__kernel void squarelocal(
+    __global float *input,
+    __global float *output,
+    __local float *temp,
+    const unsigned int count)
+{
+    int gtid = get_global_id(0);
+    int ltid = get_local_id(0);
+    if (gtid < count)
+    {
+        temp[ltid] = input[gtid];
+        output[gtid] =  temp[ltid] * temp[ltid];
+    }
+}
+  ")
+  
+(def OpenCLoutputAtom1 (atom 0))
+(def OpenCLoutputAtom2 (atom 0))
+(def OpenCLoutputAtom3 (atom 0))
+(def OpenCLoutputAtom4 (atom 0))
+(def OpenCLoutputAtom5 (atom 0))
+
+(defn testoutputs [x]
+(let [global_clj_size x
+      inputvec (vec (for [i (range global_clj_size)] (rand)))]
+
+(with-cl
+  (with-program (compile-program sourceOpenCL2)
+    (let [a (wrap inputvec :float32)
+          b (mimic a)
+          c (wrap inputvec :float32)
+          d (mimic a)
+          globalsize global_clj_size
+          ]
+      (time (enqueue-kernel :square      globalsize a b                         globalsize))
+      (time (enqueue-kernel :squarelocal globalsize c d (local global_clj_size) globalsize))
+      (swap! OpenCLoutputAtom1 (fn [x] (deref (enqueue-read a))))
+      (swap! OpenCLoutputAtom2 (fn [x] (deref (enqueue-read b))))
+      (swap! OpenCLoutputAtom3 (fn [x] (deref (enqueue-read c))))
+      (swap! OpenCLoutputAtom4 (fn [x] (deref (enqueue-read d))))
+      (release! a)
+      (release! b)
+      (release! c)
+      (release! d)
+    nil)))
+      
+(println 
+(reduce (fn [coll x]
+           (and coll (== (@OpenCLoutputAtom2 x) (@OpenCLoutputAtom4 x) )))
+ [] (range 0 global_clj_size))   ;tests outputs buffers were the same
+ 
+(reduce (fn [coll x]
+           (and coll (== (@OpenCLoutputAtom1 x) (@OpenCLoutputAtom3 x) )))
+ [] (range 0 global_clj_size))   ;tests input bufferes were the same
+
+(reduce (fn [coll x]
+           (and coll (== (@OpenCLoutputAtom2 x) (* (@OpenCLoutputAtom1 x) (@OpenCLoutputAtom1 x)) )))
+ [] (range 0 global_clj_size))    ;tests the :square computation came back with correct answer
+
+ (reduce (fn [coll x]
+           (and coll (== (@OpenCLoutputAtom4 x) (* (@OpenCLoutputAtom3 x) (@OpenCLoutputAtom3 x)) )))
+ [] (range 0 global_clj_size))    ;tests the :squarelocal computation came back with correct answer
+(count @OpenCLoutputAtom1)
+(count @OpenCLoutputAtom2)
+(count @OpenCLoutputAtom3)
+(count @OpenCLoutputAtom4)
+ )))
+ 
+(testoutputs (* 2))
+(testoutputs (* 2 2))
+(testoutputs (* 2 2 2))
+(testoutputs (* 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2 2 2 2 2 2 2))
+(testoutputs (* 2 2 2 2 2 2 2 2 2 2 2 2 2))  ;; 8192*sizeoffloat(4)= 32768bites in local memory = This is the largest things can be for the local call.. on my GPU card.
+(testoutputs (* 2 2 2 2 2 2 2 2 2 2 2 2 2 2))  ;; this and any larger local sizes fail with:
+;java.lang.RuntimeException: Exception while waiting for events [Event {commandType: ReadBuffer}] (NO_SOURCE_FILE:0)
+
+
+(count @OpenCLoutputAtom4)
+ 
+(@OpenCLoutputAtom1 0)
+(@OpenCLoutputAtom4 0)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops14
+
+
+LOCAL LOOPS WITHIN KERNEL
+
 ;;TODO 
+;iteration within a kernel (C like loops)
+;logicals within a kernel  (C if statements?)
 ;OK Test may kernels
 ;OK many buffers
 ;OK passing buffers between kernels 
 ;OK lookup int position in one buffer to find value in another buffer
-;iteration within a kernel (C like loops)
-;logicals within a kernel  (C if statements?)
-;;TODO optimisation with 	 --  int lsize = get_local_size(0);  --  int lid = get_local_id(0);
-
-
-
+;OK TODO optimisation with  --  int lsize = get_local_size(0);  --  int lid = get_local_id(0);
 
 
 
