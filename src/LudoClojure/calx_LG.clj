@@ -941,9 +941,8 @@ __kernel void squarelocal(
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;; Iteration loops14
+;LOCAL LOOPS WITHIN KERNEL
 
-
-LOCAL LOOPS WITHIN KERNEL
 (quote 
 
 (def sourceOpenCL2
@@ -1019,15 +1018,17 @@ __kernel void looper(
 (println "Total nanotime in ms:" (/ (- endnanotime startnanotime ) 1000000.0)
          "\noperations per second" (/ (bigint(/ (* InnerLoopCount (count @OpenCLoutputAtom1)) (/ (- endnanotime startnanotime ) 1000000000.0))) 1000000000.0) " Bln")
 ))
+
+
 (use 'clojure.contrib.math)
 
 
-(testoutputs (expt 2 23) 1  1000)
+(testoutputs (expt 2 11) 1  1000)
 
 (testoutputs (expt 2 23) 1  1000)  ;7.7
 (testoutputs (expt 2 22) 1  10)  ;6.51 GFLOPS
 (testoutputs (expt 2 21) 2  1000)  ;4.5
-(testoutputs (expt 2 20) 4  1000)  ;2.59
+(testoutputs (expt 2 10) 4  1000)  ;2.59
 
 (testoutputs (expt 2 19) 4  10000)
 (testoutputs (expt 2 20) 2  1)
