@@ -1020,7 +1020,6 @@ __kernel void looper(
 ))
 
 
-(use 'clojure.contrib.math)
 
 
 (testoutputs (expt 2 11) 1  1000)

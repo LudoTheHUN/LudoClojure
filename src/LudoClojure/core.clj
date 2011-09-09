@@ -1,6 +1,10 @@
 (ns LudoClojure.core
   (:use LudoClojure.Win_scrachAlwaysRun)
   (:gen-class))
+  
+(use 'calx)
+(use 'clojure.contrib.math)
+
 
   
 (defn hello
@@ -13,13 +17,11 @@
   (println "Its not easy enough to get started with Clojure programming")
   (println (hello args))
 )
-(use 'calx)
 
 
 
 
 (println "hello there from core.clj file")
-
 
 
 
@@ -95,19 +97,23 @@ __kernel void looper(
 									"\n Problemsize    :" (count @OpenCLoutputAtom1)
 									))
 									
-(println "testing output: " (time (reduce (fn [coll x]
+(def startnanotime_clj (. System (nanoTime)))
+(def testOpenCl_vs_clj(reduce (fn [coll x]
            (and coll (== (@OpenCLoutputAtom2 x) (* (@OpenCLoutputAtom1 x) (@OpenCLoutputAtom1 x)) )))
- [] (range 0 global_clj_size))))
-(println "Total nanotime in ms:" (/ (- endnanotime startnanotime ) 1000000.0)
+ [] (range 0 global_clj_size)))
+(def endnanotime_clj (. System (nanoTime)))
+(println "testing output: " testOpenCl_vs_clj )
+
+
+(println "Total OpenCL kereltime in ms:" (/ (- endnanotime startnanotime ) 1000000.0)
          "\noperations per second" (/ (bigint(/ (* InnerLoopCount (count @OpenCLoutputAtom1)) (/ (- endnanotime startnanotime ) 1000000000.0))) 1000000000.0) " Bln")
+(println "Total Clojure time in ms:" (/ (- endnanotime_clj startnanotime_clj ) 1000000.0)
+         "\noperations per second" (/ (bigint(/ (* (count @OpenCLoutputAtom1)) (/ (- endnanotime_clj startnanotime_clj ) 1000000000.0))) 1000000000.0) " Bln")
+
+		 
 ))
 
 
-(use 'clojure.contrib.math)
-
-(testoutputs (expt 2 21) 1  100)  ;7.7
+(println "example code \n (testoutputs (expt 2 19) 1  100)  ");7.7
 
  
-
-
-
