@@ -6,5 +6,5 @@
 		         [gloss "0.1.1-SNAPSHOT"]
 				 ]
 				 ;;Note including calx + gloss cause error "Exception in thread "main" java.lang.SecurityException: Invalid signature file digest for Manifest main attributes"
-  ;:jvm-opts ["-Xmx1024m"]
+  :jvm-opts ["-Xmx1300m"]
   :main LudoClojure.core )

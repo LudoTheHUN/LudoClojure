@@ -1037,7 +1037,254 @@ __kernel void looper(
 (testoutputs 1 (expt 2 22)  1)
  
  )
+ 
+ 
+ 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops15
+;Better closures!
+;;New best practice: provide 'default' values for veraibles with (def ...) at top level, rebind them with let within function definitons...
+;;This way sub statements can be run at top level + debuged without having to recreate inner function state?? aaaHHaaaaaaaa, why doesn't the literature just say that? It's so much easier to develop with closures!
+
+
+(quote 
+
+(def sourceOpenCL2
+  " 
+__kernel void looper(
+    __global float *input,
+    __global float *output,
+    const unsigned int localloopsize)
+{
+    int iatom;
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+	
+    for( iatom = 0; iatom < localloopsize; iatom+=1 )
+        output[iatom + gid*localloopsize] = input[iatom + gid*localloopsize] * input[iatom + gid*localloopsize];
+}
+  ")
+  
+(def OpenCLoutputAtom1 (atom [0 1 2 3 4]))
+(def OpenCLoutputAtom2 (atom [1 1 2 3 4]))
+(def OpenCLoutputAtom3 (atom [2 1 2 3 4]))
+(def OpenCLoutputAtom4 (atom [3 1 2 3 4]))
+(def OpenCLoutputAtom5 (atom [4 1 2 3 4]))
+
+(def global_clj_size 4)
+(def globalsize 256)
+(def localsize 16)
+(def InnerLoopCount 16)
+(def inputvec_float (vec (for [i (range global_clj_size)] (rand))))
+
+(defn testoutputs [global local InnerLoopCount]
+(let [globalsize global
+      localsize local
+      global_clj_size (* local global)
+	  InnerLoopCount InnerLoopCount
+      inputvec_float (vec (for [i (range global_clj_size)] (rand)))]
+
+;;(with-cl (def openCLbuffer (wrap (vec (for [i (range 10000000)] (rand))) :int32)))
+;;(with-cl @(enqueue-read openCLbuffer ))
+	  
+(with-cl
+  (with-program (compile-program sourceOpenCL2)
+    (let [a (wrap inputvec_float :float32)
+          b (mimic a)
+          c (wrap inputvec_float :float32)
+          d (mimic a)
+          cl_localsize localsize]
+	    (def startnanotime (. System (nanoTime)))
+		    (loop [k InnerLoopCount]
+		          (do (enqueue-kernel :looper globalsize a b cl_localsize)
+	                  (enqueue-barrier)
+			          (finish))
+               (if (= k 1) nil (recur (dec k) )))					  ;;This seem like the correct time to enforce execution?!!
+	    (def endnanotime (. System (nanoTime)))			 
+      (swap! OpenCLoutputAtom1 (fn [foo] (deref (enqueue-read a))))
+      (swap! OpenCLoutputAtom2 (fn [foo] (deref (enqueue-read b))))
+      (release! a)
+      (release! b)
+    nil)))
+
+(count @OpenCLoutputAtom1)
+(count @OpenCLoutputAtom2)
+(if (> 8 (count inputvec_float))
+    (println " " @OpenCLoutputAtom1 "\n " @OpenCLoutputAtom2)
+	(println "too big to print,"
+
+	                                "\n CLin is        :" (@OpenCLoutputAtom1 (- global_clj_size 1)) 
+	                                "\n CLin target    :" (* (@OpenCLoutputAtom1 (- global_clj_size 1)) (@OpenCLoutputAtom1 (- global_clj_size 1)))
+									"\n CLout          :" (@OpenCLoutputAtom2 (- global_clj_size 1))
+									"\n orgin Input    :" (inputvec_float (- global_clj_size 1))
+									"\n orgin Output   :" (* (inputvec_float (- global_clj_size 1)) (inputvec_float (- global_clj_size 1)))
+									"\n Problemsize    :" (count @OpenCLoutputAtom1)
+									))
+									
+(def startnanotime_clj (. System (nanoTime)))
+(def testOpenCl_vs_clj(reduce (fn [coll x]
+           (and coll (== (@OpenCLoutputAtom2 x) (* (@OpenCLoutputAtom1 x) (@OpenCLoutputAtom1 x)) )))
+ [] (range 0 global_clj_size)))
+(def endnanotime_clj (. System (nanoTime)))
+(println "testing output: " testOpenCl_vs_clj )
+
+
+(println "Total OpenCL kereltime in ms:" (/ (- endnanotime startnanotime ) 1000000.0)
+         "\noperations per second" (/ (bigint(/ (* InnerLoopCount (count @OpenCLoutputAtom1)) (/ (- endnanotime startnanotime ) 1000000000.0))) 1000000000.0) " Bln")
+(println "Total Clojure time in ms:" (/ (- endnanotime_clj startnanotime_clj ) 1000000.0)
+         "\noperations per second" (/ (bigint(/ (* (count @OpenCLoutputAtom1)) (/ (- endnanotime_clj startnanotime_clj ) 1000000000.0))) 1000000000.0) " Bln")
+))
+
+
+
+
+(testoutputs (expt 2 11) 1  1000)
+
+(testoutputs (expt 2 23) 1  1000)  ;7.7
+(testoutputs (expt 2 22) 1  10)  ;6.51 GFLOPS
+(testoutputs (expt 2 21) 2  1000)  ;4.5
+(testoutputs (expt 2 10) 4  1000)  ;2.59
+
+(testoutputs (expt 2 19) 4  10000)
+(testoutputs (expt 2 20) 2  1)
+(testoutputs (expt 2 21) 1  1)
+(testoutputs 1 (expt 2 21)  1)
+(testoutputs (expt 2 21) 1  1)
+(testoutputs 1 (expt 2 22)  1)
+ 
+ )
+
+ 
+ 
+ 
+ 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;; Iteration loops16
+;onload onto GPU
+;;New best practice: provide 'default' values for veraibles with (def ...) at top level, rebind them with let within function definitons...
+;;This way sub statements can be run at top level + debuged without having to recreate inner function state?? aaaHHaaaaaaaa, why doesn't the literature just say that? It's so much easier to develop with closures!
+
+
+
+(def sourceOpenCL2
+  " 
+__kernel void looper(
+    __global float *input,
+    __global float *output,
+    const unsigned int localloopsize)
+{
+    int iatom;
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+	
+    for( iatom = 0; iatom < localloopsize; iatom+=1 )
+        output[iatom + gid*localloopsize] = input[iatom + gid*localloopsize] * input[iatom + gid*localloopsize];
+}
+  ")
+  
+(def OpenCLoutputAtom1 (atom 0))
+(def OpenCLoutputAtom2 (atom 0))
+(def OpenCLoutputAtom3 (atom 0))
+(def OpenCLoutputAtom4 (atom 0))
+(def OpenCLoutputAtom5 (atom 0))
+
+(def global_clj_size 4)
+(def globalsize 256)
+(def localsize 16)
+(def InnerLoopCount 16)
+(def inputvec_float (vec (for [i (range global_clj_size)] (rand))))
+
+(defn testoutputs [global local InnerLoopCount]
+(let [globalsize global
+      localsize local
+      global_clj_size (* local global)
+      inputvec_float (vec (for [i (range global_clj_size)] (rand)))]
+
+;;(with-cl (def openCLbuffer (wrap (vec (for [i (range 10000000)] (rand))) :int32)))
+;;(with-cl @(enqueue-read openCLbuffer ))
+	  
+(with-cl
+  (with-program (compile-program sourceOpenCL2)
+    (let [a (wrap inputvec_float :float32)
+          b (mimic a)
+          c (mimic a)
+          d (mimic a)
+		  e (mimic a)
+		  f (mimic a)
+		  g (mimic a)
+		  h (mimic a)
+          cl_localsize localsize]
+	    (def startnanotime (. System (nanoTime)))
+		    (loop [k InnerLoopCount]
+		          (do (enqueue-kernel :looper globalsize a b cl_localsize)
+				      (enqueue-kernel :looper globalsize a c cl_localsize)
+					  (enqueue-kernel :looper globalsize a d cl_localsize)
+					  (enqueue-kernel :looper globalsize a e cl_localsize)
+					  (enqueue-kernel :looper globalsize a f cl_localsize)
+					  (enqueue-kernel :looper globalsize a g cl_localsize)
+					  (enqueue-kernel :looper globalsize a h cl_localsize)  ;This seems a very dirty way to onload data into the GPU... then again... why not...
+	                  (enqueue-barrier)
+			          (finish))
+               (if (= k 1) nil (recur (dec k) )))					  ;;This seem like the correct time to enforce execution?!!
+	    (def endnanotime (. System (nanoTime)))			 
+      (swap! OpenCLoutputAtom1 (fn [foo] (deref (enqueue-read a))))
+      (swap! OpenCLoutputAtom2 (fn [foo] (deref (enqueue-read b))))
+      (release! a)
+      (release! b)
+    nil)))
+
+(count @OpenCLoutputAtom1)
+(count @OpenCLoutputAtom2)
+(if (> 8 (count inputvec_float))
+    (println " " @OpenCLoutputAtom1 "\n " @OpenCLoutputAtom2)
+	(println "too big to print,"
+
+	                                "\n CLin is        :" (@OpenCLoutputAtom1 (- global_clj_size 1)) 
+	                                "\n CLin target    :" (* (@OpenCLoutputAtom1 (- global_clj_size 1)) (@OpenCLoutputAtom1 (- global_clj_size 1)))
+									"\n CLout          :" (@OpenCLoutputAtom2 (- global_clj_size 1))
+									"\n orgin Input    :" (inputvec_float (- global_clj_size 1))
+									"\n orgin Output   :" (* (inputvec_float (- global_clj_size 1)) (inputvec_float (- global_clj_size 1)))
+									"\n Problemsize    :" (count @OpenCLoutputAtom1)
+									))
+
+									
+									
+									
+(println "Total OpenCL kereltime in ms:" (/ (- endnanotime startnanotime ) 1000000.0)
+         "\noperations per second" (/ (bigint(/ (* InnerLoopCount (count @OpenCLoutputAtom1)) (/ (- endnanotime startnanotime ) 1000000000.0))) 1000000000.0) " Bln")
+
+									
+(def startnanotime_clj (. System (nanoTime)))
+(def testOpenCl_vs_clj(reduce (fn [coll x]
+           (and coll (== (@OpenCLoutputAtom2 x) (* (@OpenCLoutputAtom1 x) (@OpenCLoutputAtom1 x)) )))
+ [] (range 0 global_clj_size)))
+(def endnanotime_clj (. System (nanoTime)))
+(println "testing output: " testOpenCl_vs_clj )
+
+(println "Total Clojure time in ms:" (/ (- endnanotime_clj startnanotime_clj ) 1000000.0)
+         "\noperations per second" (/ (bigint(/ (* (count @OpenCLoutputAtom1)) (/ (- endnanotime_clj startnanotime_clj ) 1000000000.0))) 1000000000.0) " Bln")
+
+
+		 
+))
+
+
+(println "example code \n (testoutputs (expt 2 19) 1  100)  ");7.7
+(quote
+(testoutputs (* 64 64 64 32) 1  1000)
+(testoutputs (* 64 64 64) 8  1000)
+(testoutputs (* 64 64 32) 16  1000)
+(testoutputs (* 64 64 16) 32  1000)
+)
+
+
+
+ 
 ;;TODO 
 ;iteration within a kernel (C like loops)
 ;logicals within a kernel  (C if statements?)
