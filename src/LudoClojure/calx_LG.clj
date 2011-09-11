@@ -1283,7 +1283,7 @@ __kernel void looper(
 )
 
 
-
+(def inputvec_float (vec (for [i (range global_clj_size)] (float (rand)))))
  
 ;;TODO 
 ;iteration within a kernel (C like loops)
