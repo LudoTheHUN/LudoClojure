@@ -60,11 +60,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops20
-;Max GPU onload.
-;Load in a buffer incrementally...
-;Read out a buffer incrementally...
-;"There is no spoon"  ...   (wrap...) creates the openCL buffer, it can be consumed by a enqueue-kernel directly... Without RAM Cost??
+;;;;; Iteration loops21
+;
+
+
 (def sourceOpenCL2
   " 
 __kernel void looper(
@@ -81,11 +80,11 @@ __kernel void looper(
 }
   ")
   
-(def OpenCLoutputAtom1 (atom [1]))
-(def OpenCLoutputAtom2 (atom [1]))
-(def OpenCLoutputAtom3 (atom [1]))
-(def OpenCLoutputAtom4 (atom [1]))
-(def OpenCLoutputAtom5 (atom [1]))
+;(def OpenCLoutputAtom1 (atom [1]))
+;(def OpenCLoutputAtom2 (atom [1]))
+;(def OpenCLoutputAtom3 (atom [1]))
+;(def OpenCLoutputAtom4 (atom [1]))
+;(def OpenCLoutputAtom5 (atom [1]))
 
 (def global_clj_size (* 64 64 64))
 (def globalsize global_clj_size)
@@ -94,13 +93,10 @@ __kernel void looper(
 ;(def inputvec_float (vec (for [i (range global_clj_size)] (float (rand)))))
 (def timingonly :timeingonly)
 
-(defn swapIn_OpenCLoutputAtom2! [global_clj_size]
-  (swap! OpenCLoutputAtom2 (fn [foo] [0]))   ; A pre data nuke to reduce RAM footptint during swapin
-  (swap! OpenCLoutputAtom2 (fn [foo] 
-                               (^floats float-array global_clj_size
-                                   (for [i (range global_clj_size)] (float (rand)))))) ;Optimal sequece based float-arrat atom creation. ; nice beucase of almost instant alocation
-  (println "(type @OpenCLoutputAtom2) :" (type @OpenCLoutputAtom2))
-  (println "(nth @OpenCLoutputAtom2 0):" (nth @OpenCLoutputAtom2 0)))
+
+
+
+
 								   
 
 
@@ -196,9 +192,41 @@ __kernel void looper(
 )
 
 
-(def global_clj_size (* 64 64 64 64 2))
-(swapIn_OpenCLoutputAtom2! (* global_clj_size 1))
-(testoutputs global_clj_size 1  1000 :timeingonly)
+(defmacro swapIn_atom! [atomname global_clj_size atomgeneraorfunction]
+  `(let [global_clj_size# ~global_clj_size]
+	(def ~atomname (atom []))   ; A pre data nuke to reduce RAM footptint during swapin
+    (swap! ~atomname (fn [~atomname] (~atomgeneraorfunction global_clj_size#))) ;Optimal sequece based float-arrat atom creation. ; nice beucase of almost instant alocation
+    (println "(type @" '~atomname ") :" (type (deref ~atomname)))
+    (println "(nth @" '~atomname " 0):" (nth (deref ~atomname) 0))))
+
+(macroexpand-1 '(swapIn_atom! OpenCLoutputAtom2 (* global_clj_size 1) randomarraygenerator))
+
+(defmacro makeatom! [atomame]
+  `(do (def ~atomame (atom [1]))
+   (swap! ~atomame (fn [~atomame] 1))))
+
+ (do (def boo (atom [1]))
+   (swap! boo (fn [_] 1)))
+   
+(makeatom! fooooo)
+(macroexpand-1 '(makeatom! fooooo))
+@fooooo
+(class fooooo)
+
+(string? 'OpenCLoutputAtom2)
+(resolve 'foo)
+
+
+;;Note, as we develop better liquids, we can just define them with these liquid generating functions
+(defn randomarraygenerator [global_clj_size]
+  (^floats float-array global_clj_size
+    (for [i (range global_clj_size)] (float (rand)))))
+	
+(def global_clj_size (* 64 64 64 4))
+;(swapIn_OpenCLoutputAtom2! (* global_cljze_si 1))
+(swapIn_atom! OpenCLoutputAtom2 (* global_clj_size 1) randomarraygenerator)
+(swapIn_atom! OpenCLoutputAtom3 16 randomarraygenerator)
+(testoutputs global_clj_size 1  10000 :timeingonly)
 ;(testoutputs (* 2 2 2) 2  10 :not)
 
 
