@@ -77,25 +77,21 @@ return (m_z << 16) + m_w;
 }
   
 __kernel void randomnumbergen(
-    __global int *input_i,
-    __global uint *output_i,
-	__global float *output_f)
+    __global int *output_i)
 {
 
     int gid = get_global_id(0);
     int gsize = get_global_size(0);
 
-	int m_z = gid;
-	int m_w = 1;
-	int randomnumber = 1;
-	m_z = 36969 * (m_z & 65535) + (m_z >> 16);
+    int m_z = gid;
+    int m_w = 1;
+    int randomnumber = 1;
+    m_z = 36969 * (m_z & 65535) + (m_z >> 16);
     m_w = 18000 * (m_w & 65535) + (m_w >> 16);
-	randomnumber = (m_z << 16) + m_w;
+    randomnumber = (m_z << 16) + m_w;
 
     output_i[gid] = randomnumber_fun(gid, 1);
-	output_f[gid] = 1.0 / gid ;
-	
-	
+
 }
   ")
   
@@ -114,57 +110,60 @@ __kernel void randomnumbergen(
 ;    m_w = 18000 * (m_w & 65535) + (m_w >> 16);
 ;    return (m_z << 16) + m_w;  /* 32-bit result */
 ;}
-(def gloal_size_clj (* 64 64 64 64 4))
-(def innerloop_clj 1)
+(def gloal_size_clj (* 64 64 64 64 12))
+(def innerloop_clj 100)
 
 (with-cl
   (with-program (compile-program sourceOpenCL)
-	(let [gloal_size gloal_size_clj
-	      InnerLoopCount innerloop_clj]
-		  
-		(println "about to onload buffer")
-		(def startnanotime_bufferCreateTime (. System (nanoTime)))
-	    (def Buffer_int1   (create-buffer gloal_size :int32  ))
-		(def Buffer_int2   (create-buffer gloal_size :int32  ))
-		(def Buffer_float  (create-buffer gloal_size :float32)) 		
-		(enqueue-barrier) (finish)		
-		(def endnanotime_bufferCreateTime (. System (nanoTime)))
-		
-	    (def startnanotime_kerneltime (. System (nanoTime)))
-		  (loop [k InnerLoopCount]
-		          (do
-						(enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 Buffer_float) 
-						(enqueue-barrier)   ;Could load in a huge buffer a bloack at a time...
-						(finish))
+    (let [gloal_size gloal_size_clj
+        InnerLoopCount innerloop_clj]
+        
+        (println "about to onload buffer")
+        (def startnanotime_bufferCreateTime (. System (nanoTime)))
+        (def Buffer_int1   (create-buffer gloal_size :int32  ))
+        (enqueue-barrier) (finish)		
+        (def endnanotime_bufferCreateTime (. System (nanoTime)))
+
+        (def startnanotime_kerneltime (. System (nanoTime)))
+        (loop [k InnerLoopCount]
+                (do
+                        (enqueue-kernel :randomnumbergen gloal_size Buffer_int1) 
+                        (enqueue-barrier)   ;Could load in a huge buffer a bloack at a time...
+                        (finish))
           (if (= k 1) nil (recur (dec k) )))					  ;;This seem like the correct time to enforce execution?!!
-	    (def endnanotime_kerneltime (. System (nanoTime)))
-		
-		(def startnanotime_bufferReadOutTime (. System (nanoTime)))
-		
-        (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-        (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 6400])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-        (swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+        (def endnanotime_kerneltime (. System (nanoTime)))
+        
+        (def startnanotime_bufferReadOutTime (. System (nanoTime)))
+        
+        (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 6400])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+    ;    (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 6400])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+    ;    (swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
  
-		(def endnanotime_bufferReadOutTime (. System (nanoTime)))
+        (def endnanotime_bufferReadOutTime (. System (nanoTime)))
         (enqueue-barrier) (finish)
-		(release! Buffer_float)
-		(enqueue-barrier)
-		(finish)
-	nil)))
+        (release! Buffer_int1)
+        (enqueue-barrier)
+        (finish)
+    nil)))
 
-(println (vec @OpenCLoutputAtom1))
+;(println (vec @OpenCLoutputAtom1))
 ;(println (vec @OpenCLoutputAtom2))
-(println (vec @OpenCLoutputAtom3))
+;(println (vec @OpenCLoutputAtom3))
 
-(println(count @OpenCLoutputAtom2))
-(println(reduce + @OpenCLoutputAtom2) )
-(println(/ (reduce + @OpenCLoutputAtom2) (count @OpenCLoutputAtom2) ))
+(println(count @OpenCLoutputAtom1))
+(println(reduce + @OpenCLoutputAtom1) )
+(println(/ (reduce + @OpenCLoutputAtom1) (count @OpenCLoutputAtom1) ))
 
 (do (println "Total OpenCL kereltime in ms:" (/ (- endnanotime_kerneltime startnanotime_kerneltime ) 1000000.0)
            "\nnumber operations per second:" (/ (bigint(/ (* gloal_size_clj innerloop_clj) (/ (- endnanotime_kerneltime startnanotime_kerneltime ) 1000000000.0))) 1000000000.0) " Bln"
-		))
+        ))
 
 
+;Total OpenCL kereltime in ms: 1715.679627
+;number operations per second: 11.734509685  Bln
+;LudoClojure.core=> (* 64 64 64 64 12)
+;201326592        
+        
 
 		
 ;(serialize [12 2 3] "c:/cygwin/home/Ludo/git/LudoClojure/data/scrach")
