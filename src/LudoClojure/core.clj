@@ -12,8 +12,9 @@
         '(java.awt.Robot.)
         '(java.awt.image BufferedImage DirectColorModel PixelGrabber)
         '(javax.imageio ImageIO)
-        '(java.awt Color Graphics Graphics2D)
-        )  
+        '(java.awt Color Graphics Graphics2D Dimension)
+		'(javax.swing JPanel JFrame)
+        )
 		
 ;(:import [com.nativelibs4java.opencl CLContext CLByteBuffer CLMem CLMem$Usage CLEvent]
 ;	     [com.nativelibs4java.util NIOUtils]
@@ -62,35 +63,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;; Iteration loops24
 ;Random number generator    , towards on-the-fly, self materalising liquids
-
+;First UI just to show the random numbers....
   
 (def sourceOpenCL
   "
 
-int randomnumber_fun(int m_z_in, int m_w_in)
+uint randomnumber_fun(uint m_z_in, uint m_w_in)
 {
-int m_z;
-int m_w;
+uint m_z;
+uint m_w;
 m_z = 36969 * (m_z_in & 65535) + (m_z_in >> 16);
 m_w = 18000 * (m_w_in & 65535) + (m_w_in >> 16);
 return (m_z << 16) + m_w;
 }
   
 __kernel void randomnumbergen(
-    __global int *output_i)
+    __global uint *output_i)
 {
-
     int gid = get_global_id(0);
     int gsize = get_global_size(0);
-
-    int m_z = gid;
-    int m_w = 1;
-    int randomnumber = 1;
-    m_z = 36969 * (m_z & 65535) + (m_z >> 16);
-    m_w = 18000 * (m_w & 65535) + (m_w >> 16);
-    randomnumber = (m_z << 16) + m_w;
-
-    output_i[gid] = randomnumber_fun(gid, 1);
+    output_i[gid] = randomnumber_fun(gid, gid ) % 1000;
 
 }
   ")
@@ -110,8 +102,8 @@ __kernel void randomnumbergen(
 ;    m_w = 18000 * (m_w & 65535) + (m_w >> 16);
 ;    return (m_z << 16) + m_w;  /* 32-bit result */
 ;}
-(def gloal_size_clj (* 64 64 64 64 12))
-(def innerloop_clj 100)
+(def gloal_size_clj (* 64 64))
+(def innerloop_clj 10)
 
 (with-cl
   (with-program (compile-program sourceOpenCL)
@@ -135,7 +127,7 @@ __kernel void randomnumbergen(
         
         (def startnanotime_bufferReadOutTime (. System (nanoTime)))
         
-        (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 6400])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+        (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 4096])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
     ;    (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 6400])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
     ;    (swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
  
@@ -157,6 +149,53 @@ __kernel void randomnumbergen(
 (do (println "Total OpenCL kereltime in ms:" (/ (- endnanotime_kerneltime startnanotime_kerneltime ) 1000000.0)
            "\nnumber operations per second:" (/ (bigint(/ (* gloal_size_clj innerloop_clj) (/ (- endnanotime_kerneltime startnanotime_kerneltime ) 1000000000.0))) 1000000000.0) " Bln"
         ))
+
+(nth @OpenCLoutputAtom1 0)
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; UI ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;pixels per world cell
+(def scale 5)
+(def dim 120)
+
+(defn render [g]
+  (let [img (new BufferedImage (* scale dim) (* scale dim) 
+                 (. BufferedImage TYPE_INT_ARGB))
+        bg (. img (getGraphics))]
+    (doto bg
+      (.setColor (. Color white))
+      (.fillRect 0 0 (. img (getWidth)) (. img (getHeight))))
+    (doto bg
+	 (.setColor (. Color blue))
+	 (.drawRect 10 20 30 40)
+	 (.drawLine 15 15 15 15))
+	 
+	 (dorun 
+      (for [x (range 1000) ]
+	    (doto bg
+		  (.setColor (. Color red))
+	      (.drawLine  (+ ( / (nth @OpenCLoutputAtom1 x) 10.0) 300)
+		              x 
+					  (+ ( / (nth @OpenCLoutputAtom1 x) 10.0) 300)
+					  x))))
+	
+    (. g (drawImage img 0 0 nil))
+    (. bg (dispose))))
+
+	
+(def panel (doto (proxy [JPanel] []
+                        (paint [g] (render g)))
+             (.setPreferredSize (new Dimension 
+                                     (* scale dim)
+                                     (* scale dim)))))
+
+(def frame (doto (new JFrame) (.add panel) .pack .show))
+
+
+
 
 
 ;Total OpenCL kereltime in ms: 1715.679627
