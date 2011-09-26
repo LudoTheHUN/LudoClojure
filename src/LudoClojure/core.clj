@@ -61,10 +61,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops24
+;;;;; Iteration loops25
 ;Random number generator    , towards on-the-fly, self materalising liquids
 ;First UI just to show the random numbers....
-  
+ ;;TODO see what happen with itterative random number generation (based on previous random number created
+ 
+ 
+ 
 (def sourceOpenCL
   "
 
