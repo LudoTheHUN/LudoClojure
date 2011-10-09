@@ -7,13 +7,13 @@
 
   (:gen-class))
   
-(import '(java.awt AWTException Robot Rectangle Toolkit)
+(import '(java.awt AWTException Robot Rectangle Toolkit GridLayout GridBagLayout)
         '(java.io File IOException PushbackReader FileReader)
         '(java.awt.Robot.)
         '(java.awt.image BufferedImage DirectColorModel PixelGrabber)
         '(javax.imageio ImageIO)
         '(java.awt Color Graphics Graphics2D Dimension)
-		'(javax.swing JPanel JFrame)
+		'(javax.swing JPanel JFrame JSlider BoxLayout)
         )
 		
 ;(:import [com.nativelibs4java.opencl CLContext CLByteBuffer CLMem CLMem$Usage CLEvent]
@@ -24,7 +24,7 @@
 (use 'calx)
 (use 'clojure.contrib.math)
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 
 (defn serialize
@@ -61,16 +61,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops26
-;moving random gen to within kernel for itterative creation 
- ;;TODO see what happen with itterative random number generation (based on previous random number created
- 
- 
- 
+;;;;; Iteration loops28
+;TODO animate over growin moding values for random number geerator...
+;TODO Add a user interface, slider?, for the moding value.
+;TODO recode GUI with ??  http://lifeofaprogrammergeek.blogspot.com/2009/05/model-view-controller-gui-in-clojure.html
+
 (def sourceOpenCL
   "
-
-
 
 __kernel void randomnumbergen(
     __global uint *output_i,
@@ -90,8 +87,12 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
     m_z = 36969 * (m_z & 65535) + (m_z >> 16);
     m_w = 18000 * (m_w & 65535) + (m_w >> 16);
 
-    output_i[gid*kernelloopsize + iatom ] = ((m_z << 16) + m_w)  % 10;      //This is the random number being created. Note the mod operation %, this makes it easy to create a random in some range...
+    output_i[gid*kernelloopsize + iatom ] = ((m_z << 16) + m_w)  % 14;      //This is the random number being created. Note the mod operation %, this makes it easy to create a random in some range...
 	output_mz[gid*kernelloopsize + iatom ] = m_z;
+	
+	//Further neuron code goes within this loop. This loop is per neuron, each random number + some transform function on the random number is the proceduraly generated LSM synapse to resultand neuron pointers.
+	//Will need reducer like logic... with probably with +=
+	
     }
 	
 	
@@ -114,8 +115,8 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 ;    return (m_z << 16) + m_w;  /* 32-bit result */
 ;}
 (def gloal_size_clj (* 512))
-(def kernelloopsize_clj 500)
-(def innerloop_clj 10)
+(def kernelloopsize_clj 1)
+(def innerloop_clj 1)
 
 (with-cl
   (with-program (compile-program sourceOpenCL)
@@ -125,26 +126,26 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
         
         (println "about to onload buffer")
         (def startnanotime_bufferCreateTime (. System (nanoTime)))
-        (def Buffer_int1   (create-buffer (* gloal_size kernelloopsize) :int32  ))
-		(def Buffer_int2   (create-buffer (* gloal_size kernelloopsize) :int32  ))
-        (enqueue-barrier) (finish)		
+          (def Buffer_int1   (create-buffer (* gloal_size kernelloopsize) :int32  ))
+		  (def Buffer_int2   (create-buffer (* gloal_size kernelloopsize) :int32  ))
+          (enqueue-barrier) (finish)		
         (def endnanotime_bufferCreateTime (. System (nanoTime)))
 
         (def startnanotime_kerneltime (. System (nanoTime)))
-        (loop [k InnerLoopCount]
+          (loop [k InnerLoopCount]
                 (do
                         (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 kernelloopsize)   
                         (enqueue-barrier)   ;Could load in a huge buffer a bloack at a time...
-						;;;Note, this is where out 'double buffer' will go, we'll keep swapping the state back and forth between 2 sets of buffers
+						;;;Note, this is where out 'double buffer' will go, we'll keep swapping the state back and forth between 2 sets of buffers, each update is one time tick.
                         (finish))
           (if (= k 1) nil (recur (dec k) )))					  ;;This seem like the correct time to enforce execution?!!
         (def endnanotime_kerneltime (. System (nanoTime)))
         
         (def startnanotime_bufferReadOutTime (. System (nanoTime)))
         
-        (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-        (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-    ;    (swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+          (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+          (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+          ;(swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
  
         (def endnanotime_bufferReadOutTime (. System (nanoTime)))
         (enqueue-barrier) (finish)
@@ -176,7 +177,7 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 (def scale 5)
 (def dim 120)
 
-(defn render [g]
+(defn render [g]   ;note: 'g' is 
   (let [img (new BufferedImage (* scale dim) (* scale dim) 
                  (. BufferedImage TYPE_INT_ARGB))
         bg (. img (getGraphics))]
@@ -206,11 +207,26 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
                         (paint [g] (render g)))
              (.setPreferredSize (new Dimension 
                                      (* scale dim)
-                                     (* scale dim)))))
+                                     (* scale dim)))
+			 		 
+									 ))
 
-(def frame (doto (new JFrame) (.add panel) .pack .show))
+(def slider (doto (proxy [JSlider] []
+                        ;(paint [g] (render g))
+						)
+            ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
+			;(.setConstraints (. GridBagConstraints HORIZONTAL))
+									 ))
+									 
+									 
+(def frame (doto 
+             (new JFrame)
+			 (.add slider)
+			 (.add panel)
+			 .pack 
+			 .show))
 
-
+(.setLayout frame (GridBagLayout.))
 
 ;(. panel (repaint))
 
