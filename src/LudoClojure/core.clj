@@ -7,7 +7,7 @@
 
   (:gen-class))
   
-(import '(java.awt AWTException Robot Rectangle Toolkit GridLayout GridBagLayout)
+(import '(java.awt AWTException Robot Rectangle Toolkit GridLayout GridBagLayout GridBagConstraints Insets)
         '(java.io File IOException PushbackReader FileReader)
         '(java.awt.Robot.)
         '(java.awt.image BufferedImage DirectColorModel PixelGrabber)
@@ -61,10 +61,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops28
+;;;;; Iteration loops29
 ;TODO animate over growin moding values for random number geerator...
 ;TODO Add a user interface, slider?, for the moding value.
+     ;TODO set a lay out strategy... DONE!
+	 ;TODO connect up action listeners
+	 ;TODO put openCL on a action listener dependet loop
 ;TODO recode GUI with ??  http://lifeofaprogrammergeek.blogspot.com/2009/05/model-view-controller-gui-in-clojure.html
+;look at: http://kotka.de/blog/2010/03/proxy_gen-class_little_brother.html
+;Yup, I'm crazy too :-)  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
 
 (def sourceOpenCL
   "
@@ -177,7 +182,7 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 (def scale 5)
 (def dim 120)
 
-(defn render [g]   ;note: 'g' is 
+(defn render [g]   ;note: 'g' is ?????
   (let [img (new BufferedImage (* scale dim) (* scale dim) 
                  (. BufferedImage TYPE_INT_ARGB))
         bg (. img (getGraphics))]
@@ -202,7 +207,14 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
     (. bg (dispose))
 	))
 
-	
+(def slider (doto (proxy [JSlider] []
+                        ;(paint [g] (render g))
+						)
+            ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
+			;(.setConstraints (. GridBagConstraints HORIZONTAL))
+									 ))	
+									 
+									 
 (def panel (doto (proxy [JPanel] []
                         (paint [g] (render g)))
              (.setPreferredSize (new Dimension 
@@ -211,22 +223,55 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 			 		 
 									 ))
 
-(def slider (doto (proxy [JSlider] []
+
+(def slider2 (doto (proxy [JSlider] []
                         ;(paint [g] (render g))
-						)
+						)					
             ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
 			;(.setConstraints (. GridBagConstraints HORIZONTAL))
 									 ))
+
+;http://thinkrelevance.com/blog/2008/08/12/java-next-2-java-interop.html
 									 
-									 
+;(def c (new GridBagConstraints))
+;(set! (. c gridx) 3)
+;(set! (. c gridy) GridBagConstraints/RELATIVE)
+
+
 (def frame (doto 
-             (new JFrame)
-			 (.add slider)
-			 (.add panel)
+             (new JFrame "GridBagLayout Test" )
+			 (.setLayout (new GridBagLayout ))
+			 
+			 ;;This is what made it finally clear to see: http://infernus.org/2010/08/swinging-clojure/
+			 (.add panel  ;(new GridBagConstraints (. c gridx)  )
+			      (GridBagConstraints. 0 0 2 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
+			   ;;;java interop Syntax eye opener!!!
+			 ;(.setLayout panel (new GridBagLayout ))
+			 (.add slider 
+			      (GridBagConstraints. 0 1 1 1 1.0 1.0 (GridBagConstraints/EAST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
+			 (.add slider2 
+			      (GridBagConstraints. 1 1 1 1 1.0 1.0(GridBagConstraints/EAST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
+			 
+			 
+			; (.setLayout (new GridBagLayout )) 
+			  ; (def [c (new GridBagConstraints)]
+               ;(set! (. c gridx) 1)
+              ; (set! (. c gridy) 3))
+			 ;(.setLayout (new GridLayout 2 1))
+			 
 			 .pack 
 			 .show))
 
-(.setLayout frame (GridBagLayout.))
+;(.setLayout frame (GridBagLayout.)) ;; 
+;(.setLayout slider (GridBagLayout.))
+;(.setLayout slider2 (GridBagLayout.))
+;(.setLayout panel (GridBagLayout.))
+
+
+
+;http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
+
+;(.setLayout frame (BoxLayout.))
 
 ;(. panel (repaint))
 
