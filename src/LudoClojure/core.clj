@@ -15,6 +15,7 @@
         '(java.awt Color Graphics Graphics2D Dimension)
 		'(java.awt.event.ActionListener)
 		'(javax.swing JPanel JFrame JSlider BoxLayout JLabel JButton)
+		'(javax.swing.event ChangeListener ChangeEvent)
         )
 		
 ;(:import [com.nativelibs4java.opencl CLContext CLByteBuffer CLMem CLMem$Usage CLEvent]
@@ -62,12 +63,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops29
+;;;;; Iteration loops30
 ;TODO animate over growing moding values for random number geerator..., do it with slider...
 ;TODO Add a user interface, slider?, for the moding value.
      ;TODO set a lay out strategy... DONE!
 	 ;TODO connect up action listeners
-	 ;TODO put openCL on a action listener dependet loop
+	 ;TODO put openCL on a action listener dependet loop (events)
 ;TODO recode GUI with ??  http://lifeofaprogrammergeek.blogspot.com/2009/05/model-view-controller-gui-in-clojure.html
 ;look at: http://kotka.de/blog/2010/03/proxy_gen-class_little_brother.html
 ;Yup, I'm crazy too :-)  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
@@ -211,12 +212,7 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
     (. bg (dispose))
 	))
 
-(def slider (doto (proxy [JSlider] []
-                        ;(paint [g] (render g))
-						)
-            ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
-			;(.setConstraints (. GridBagConstraints HORIZONTAL))
-							 ))
+
 
 							 
 (def label (JLabel. "Counter: 0"))
@@ -227,12 +223,29 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
       (proxy [java.awt.event.ActionListener] []
         (actionPerformed [~event] ~@body))))
 
+(def slider (doto (proxy [JSlider ] [0 100 10]   ;[min max startvalue], this comes under constructor summary in:  http://download.oracle.com/javase/6/docs/api/javax/swing/JSlider.html
+                        ;(paint [g] (render g))
+						)
+				  (.addChangeListener  (proxy [ChangeListener] []    
+				                         (stateChanged [evt]
+									 (let [val (.. evt getSource getValue)]
+										    (.setText label
+                                                (str "Slider: " val))))))
+            ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
+			;(.setConstraints (. GridBagConstraints HORIZONTAL))
+							 ))
 
- 
+;;;This block also works whilst being outside of the slider definition.... shows that listeners can be added whereever...
+;(.addChangeListener slider (proxy [ChangeListener] []   
+;                            (stateChanged [evt]
+;					         (let [val (.. evt getSource getValue)]
+;					          (.setText label
+;                                (str "Slider: " val))))))					 
+
 									 						 
 (def panel (doto (proxy [JPanel] []
-                        (paint [g] (render g)))
-                 (.setPreferredSize (new Dimension 
+                        (paint [g] (render g)))   ;;'paint'  is a method inhereted from JComponent
+                 (.setPreferredSize (new Dimension      ; '.setPreferredSize'  is also a method inhereted from JComponent
                                      (* scale dim)
                                      (* scale dim)))
 				; (.setLayout (new GridBagLayout ))
@@ -262,7 +275,7 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 
 (def slider2 (doto (proxy [JSlider] []
                         ;(paint [g] (render g))
-						)					
+						)
             ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
 			;(.setConstraints (. GridBagConstraints HORIZONTAL))
 									 ))
