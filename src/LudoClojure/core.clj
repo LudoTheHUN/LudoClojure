@@ -13,7 +13,8 @@
         '(java.awt.image BufferedImage DirectColorModel PixelGrabber)
         '(javax.imageio ImageIO)
         '(java.awt Color Graphics Graphics2D Dimension)
-		'(javax.swing JPanel JFrame JSlider BoxLayout)
+		'(java.awt.event.ActionListener)
+		'(javax.swing JPanel JFrame JSlider BoxLayout JLabel JButton)
         )
 		
 ;(:import [com.nativelibs4java.opencl CLContext CLByteBuffer CLMem CLMem$Usage CLEvent]
@@ -62,7 +63,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;; Iteration loops29
-;TODO animate over growin moding values for random number geerator...
+;TODO animate over growing moding values for random number geerator..., do it with slider...
 ;TODO Add a user interface, slider?, for the moding value.
      ;TODO set a lay out strategy... DONE!
 	 ;TODO connect up action listeners
@@ -70,6 +71,8 @@
 ;TODO recode GUI with ??  http://lifeofaprogrammergeek.blogspot.com/2009/05/model-view-controller-gui-in-clojure.html
 ;look at: http://kotka.de/blog/2010/03/proxy_gen-class_little_brother.html
 ;Yup, I'm crazy too :-)  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
+;To get the image to refresh , just need to close over (closure style) openCL code , passing in the veriables?? But longer term, the opencl should be on a separate thread, in ... have a listener ...look into sendof?
+
 
 (def sourceOpenCL
   "
@@ -181,6 +184,7 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 ;pixels per world cell
 (def scale 5)
 (def dim 120)
+(def counter (atom 0))
 
 (defn render [g]   ;note: 'g' is ?????
   (let [img (new BufferedImage (* scale dim) (* scale dim) 
@@ -192,7 +196,7 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
     (doto bg
 	 (.setColor (. Color blue))
 	 (.drawRect 10 20 30 40)
-	 (.drawLine 15 15 15 15))
+	 (.drawLine 15 15 (* 2 @counter) @counter))
 	 
 	 (dorun 
       (for [x (range 511) ]
@@ -212,16 +216,48 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 						)
             ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
 			;(.setConstraints (. GridBagConstraints HORIZONTAL))
-									 ))	
-									 
-									 
+							 ))
+
+							 
+(def label (JLabel. "Counter: 0"))
+;(def button (JButton. "Add 1"))
+(defmacro on-action [component event & body]
+  ;;How ^{:doc "macro designed to make adding action listeners trivial from http://stuartsierra.com/2010/01/03/doto-swing-with-clojure"}
+  `(. ~component addActionListener
+      (proxy [java.awt.event.ActionListener] []
+        (actionPerformed [~event] ~@body))))
+
+
+ 
+									 						 
 (def panel (doto (proxy [JPanel] []
                         (paint [g] (render g)))
-             (.setPreferredSize (new Dimension 
+                 (.setPreferredSize (new Dimension 
                                      (* scale dim)
                                      (* scale dim)))
-			 		 
+				; (.setLayout (new GridBagLayout ))
+                ; (.add label
+				;    (GridBagConstraints. 0 1 1 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
+				; (.add button
+				;    (GridBagConstraints. 1 1 1 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
 									 ))
+									 
+(def button (doto (JButton. "Add 1")
+                  (on-action evnt  ;; evnt is not used
+                   (.setText label
+                      (str "Counter: " (swap! counter inc))))
+				  
+                  (on-action evnt  ;; evnt is not used
+				   (.repaint panel) (println "action jbuton click happened") )
+				;;Why o Why does this macroexpanded code not work????
+				;  (. evnt addActionListener
+				;    (proxy [java.awt.event.ActionListener] []
+                ;      (actionPerformed [(.repaint panel)] (println "action jbuton click happened"))))
+				  
+				;  (. evnt LudoClojure.core/addActionListener 
+				;       (clojure.core/proxy [java.awt.event.ActionListener] [] 
+				;	   (LudoClojure.core/actionPerformed [(.repaint panel)] (println "action jbuton click happened"))))
+					  ))
 
 
 (def slider2 (doto (proxy [JSlider] []
@@ -230,6 +266,9 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
             ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
 			;(.setConstraints (. GridBagConstraints HORIZONTAL))
 									 ))
+									 
+
+
 
 ;http://thinkrelevance.com/blog/2008/08/12/java-next-2-java-interop.html
 									 
@@ -251,7 +290,12 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 			      (GridBagConstraints. 0 1 1 1 1.0 1.0 (GridBagConstraints/EAST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
 			 (.add slider2 
 			      (GridBagConstraints. 1 1 1 1 1.0 1.0(GridBagConstraints/EAST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
-			 
+			 (.add label
+			      (GridBagConstraints. 1 2 1 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
+		     (.add button
+			      (GridBagConstraints. 0 2 1 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
+			 ;(.add label)
+			 ;(.add button)
 			 
 			; (.setLayout (new GridBagLayout )) 
 			  ; (def [c (new GridBagConstraints)]
