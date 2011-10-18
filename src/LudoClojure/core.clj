@@ -63,12 +63,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops30
+;;;;; Iteration loops31
 ;TODO animate over growing moding values for random number geerator..., do it with slider...
 ;TODO Add a user interface, slider?, for the moding value.
-     ;TODO set a lay out strategy... DONE!
-	 ;TODO connect up action listeners
+     ;TODO DONE set a lay out strategy... DONE!
+	 ;TODO DONEconnect up action listeners
 	 ;TODO put openCL on a action listener dependet loop (events)
+		;TODO close over the opencl code... or rather send it off onto another thread.?
+		;Note innner loop within openCL context can not be quit without loose hooks to openCL buffers??
 ;TODO recode GUI with ??  http://lifeofaprogrammergeek.blogspot.com/2009/05/model-view-controller-gui-in-clojure.html
 ;look at: http://kotka.de/blog/2010/03/proxy_gen-class_little_brother.html
 ;Yup, I'm crazy too :-)  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
@@ -217,11 +219,6 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 							 
 (def label (JLabel. "Counter: 0"))
 ;(def button (JButton. "Add 1"))
-(defmacro on-action [component event & body]
-  ;;How ^{:doc "macro designed to make adding action listeners trivial from http://stuartsierra.com/2010/01/03/doto-swing-with-clojure"}
-  `(. ~component addActionListener
-      (proxy [java.awt.event.ActionListener] []
-        (actionPerformed [~event] ~@body))))
 
 
 
@@ -239,7 +236,7 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 				; (.add button
 				;    (GridBagConstraints. 1 1 1 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
 									 ))
-(def slider (doto (proxy [JSlider ] [0 100 10]   ;[min max startvalue], this comes under constructor summary in:  http://download.oracle.com/javase/6/docs/api/javax/swing/JSlider.html
+(def slider (doto (proxy [JSlider ] [0 100 90]   ;[min max startvalue], this comes under constructor summary in:  http://download.oracle.com/javase/6/docs/api/javax/swing/JSlider.html
                         ;(paint [g] (render g))
 						)
 				  (.addChangeListener  (proxy [ChangeListener] []    
@@ -261,8 +258,15 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 ;					         (let [val (.. evt getSource getValue)]
 ;					          (.setText label
 ;                                (str "Slider: " val))))))	
-							 
-									 
+
+
+(defmacro on-action [component event & body]
+  ;;How ^{:doc "macro designed to make adding action listeners trivial from http://stuartsierra.com/2010/01/03/doto-swing-with-clojure"}
+  `(. ~component addActionListener
+      (proxy [java.awt.event.ActionListener] []
+        (actionPerformed [~event] ~@body))))
+
+	 
 (def button (doto (JButton. "Add 1")
                   (on-action evnt  ;; evnt is not used
                    (.setText label
@@ -270,14 +274,14 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 				  
                   (on-action evnt  ;; evnt is not used
 				   (.repaint panel) (println "action jbuton click happened") )
-				;;Why o Why does this macroexpanded code not work????
-				;  (. evnt addActionListener
-				;    (proxy [java.awt.event.ActionListener] []
-                ;      (actionPerformed [(.repaint panel)] (println "action jbuton click happened"))))
-				  
-				;  (. evnt LudoClojure.core/addActionListener 
-				;       (clojure.core/proxy [java.awt.event.ActionListener] [] 
-				;	   (LudoClojure.core/actionPerformed [(.repaint panel)] (println "action jbuton click happened"))))
+				;This is the macro expanded equivalent
+				(.addActionListener        
+				    (proxy [java.awt.event.ActionListener] []
+                      (actionPerformed [evt] 
+					      (do (.repaint panel)(println "action jbuton click happened2"))
+						  ;(println "action jbuton click happened2")
+						  )))
+
 					  ))
 
 
