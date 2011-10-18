@@ -1,5 +1,5 @@
 (ns LudoClojure.core
-  (:use LudoClojure.Win_scrachAlwaysRun)
+ ; (:use LudoClojure.Win_scrachAlwaysRun)
   (:require calx)  ;;this means that I don't haveto have a copy of the calx source in src
  
   (:require clojure.contrib.duck-streams )   ;needed for serde
@@ -48,6 +48,7 @@
   
   
 
+
 (defn -main [& args]
   (println "Its not easy enough to get started with Clojure programming")
   (println (hello args))
@@ -55,7 +56,6 @@
 
 
 (println "hello there from core.clj file")
-
 
 
 
@@ -298,8 +298,14 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 ;(set! (. c gridy) GridBagConstraints/RELATIVE)
 
 
+
+(proxy [JSlider ] [0 100 10]   ;[min max startvalue], this comes under constructor summary in:  http://download.oracle.com/javase/6/docs/api/javax/swing/JSlider.html
+                        ;(paint [g] (render g))
+						)
+
 (def frame (doto 
-             (new JFrame "GridBagLayout Test" )
+             ;(new JFrame "GridBagLayout Test" )
+			 (proxy [JFrame] ["GridBagLayout Test"])
 			 (.setLayout (new GridBagLayout ))
 			 
 			 ;;This is what made it finally clear to see: http://infernus.org/2010/08/swinging-clojure/
@@ -323,10 +329,12 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
                ;(set! (. c gridx) 1)
               ; (set! (. c gridy) 3))
 			 ;(.setLayout (new GridLayout 2 1))
-			 
+			 (.setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)   ;This is need for uberjar to be able to continue after the close event....how could this be done headlessly??
 			 .pack 
 			 .show))
 
+(println "I'm at the end")			 
+(quote
 ;(.setLayout frame (GridBagLayout.)) ;; 
 ;(.setLayout slider (GridBagLayout.))
 ;(.setLayout slider2 (GridBagLayout.))
@@ -363,6 +371,8 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 ;OK lookup int position in one buffer to find value in another buffer
 ;OK TODO optimisation with  --  int lsize = get_local_size(0);  --  int lid = get_local_id(0);
 
+
+)
 
 
 
