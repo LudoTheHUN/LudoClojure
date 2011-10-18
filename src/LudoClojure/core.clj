@@ -197,10 +197,10 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
     (doto bg
 	 (.setColor (. Color blue))
 	 (.drawRect 10 20 30 40)
-	 (.drawLine 15 15 (* 2 @counter) @counter))
+	 (.drawLine 15 (* 3 @counter) (* 2 @counter) @counter))
 	 
 	 (dorun 
-      (for [x (range 511) ]
+      (for [x (range (* @counter 5)) ]
 	    (doto bg
 		  (.setColor (. Color red))
 	      (.drawLine  (+ (nth @OpenCLoutputAtom1 x) 50)
@@ -223,24 +223,9 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
       (proxy [java.awt.event.ActionListener] []
         (actionPerformed [~event] ~@body))))
 
-(def slider (doto (proxy [JSlider ] [0 100 10]   ;[min max startvalue], this comes under constructor summary in:  http://download.oracle.com/javase/6/docs/api/javax/swing/JSlider.html
-                        ;(paint [g] (render g))
-						)
-				  (.addChangeListener  (proxy [ChangeListener] []    
-				                         (stateChanged [evt]
-									 (let [val (.. evt getSource getValue)]
-										    (.setText label
-                                                (str "Slider: " val))))))
-            ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
-			;(.setConstraints (. GridBagConstraints HORIZONTAL))
-							 ))
 
-;;;This block also works whilst being outside of the slider definition.... shows that listeners can be added whereever...
-;(.addChangeListener slider (proxy [ChangeListener] []   
-;                            (stateChanged [evt]
-;					         (let [val (.. evt getSource getValue)]
-;					          (.setText label
-;                                (str "Slider: " val))))))					 
+
+				 
 
 									 						 
 (def panel (doto (proxy [JPanel] []
@@ -254,6 +239,29 @@ for( iatom = 0; iatom < kernelloopsize; iatom+=1 )
 				; (.add button
 				;    (GridBagConstraints. 1 1 1 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
 									 ))
+(def slider (doto (proxy [JSlider ] [0 100 10]   ;[min max startvalue], this comes under constructor summary in:  http://download.oracle.com/javase/6/docs/api/javax/swing/JSlider.html
+                        ;(paint [g] (render g))
+						)
+				  (.addChangeListener  (proxy [ChangeListener] []    
+				                         (stateChanged [evt]
+									       (let [val (.. evt getSource getValue)]
+										    (do (.setText label
+                                                  (str "Slider: " val))                  ;do 1st thing 
+											    (swap! counter (fn [_] val))
+												(.repaint panel)                         ;do 2nd thing
+											    (println "slider got moved to value:" @counter )) ;do 3rd thing
+												))))
+            ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
+			;(.setConstraints (. GridBagConstraints HORIZONTAL))
+							 ))
+							 
+;;;This block also works whilst being outside of the slider definition.... shows that listeners can be added whereever...
+;(.addChangeListener slider (proxy [ChangeListener] []   
+;                            (stateChanged [evt]
+;					         (let [val (.. evt getSource getValue)]
+;					          (.setText label
+;                                (str "Slider: " val))))))	
+							 
 									 
 (def button (doto (JButton. "Add 1")
                   (on-action evnt  ;; evnt is not used
