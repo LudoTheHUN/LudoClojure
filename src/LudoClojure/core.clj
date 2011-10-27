@@ -5,6 +5,7 @@
   (:require clojure.contrib.duck-streams )   ;needed for serde
   (:require clojure.contrib.seq-utils)       ;needed for serde
   (:require [LudoClojure.randomnumberexplorer.randomnumerexplorer :as UI1])
+  (:require [LudoClojure.timelooper1.timelooper1 :as UI2])
 
   (:gen-class))
   
@@ -56,6 +57,10 @@
                                     (println "option1 selcted")
                                     (UI1/frame)
                                     ))
+  (when (=  (str (first args)) "2") (do 
+                                    (println "option2 selcted")
+                                    (UI2/frame)
+                                    ))
   (when (= (str(first args)) nil) (do 
                         (println "no options")
                         
@@ -83,5 +88,9 @@
 ;TODO recode GUI with ???  http://lifeofaprogrammergeek.blogspot.com/2009/05/model-view-controller-gui-in-clojure.html
 ;look at: http://kotka.de/blog/2010/03/proxy_gen-class_little_brother.html
 ;Yup, I'm crazy too :-)  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
+
+
+(in-ns 'LudoClojure.timelooper1.timelooper1)
+
 
 

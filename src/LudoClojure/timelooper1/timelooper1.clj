@@ -1,4 +1,4 @@
-(ns LudoClojure.randomnumberexplorer.randomnumerexplorer
+(ns LudoClojure.timelooper1.timelooper1
  ; (:use LudoClojure.Win_scrachAlwaysRun)
   (:require calx)  ;;this means that I don't haveto have a copy of the calx source in src
  
@@ -16,6 +16,7 @@
         '(java.awt.event.ActionListener)
         '(javax.swing JPanel JFrame JSlider BoxLayout JLabel JButton SwingConstants)
         '(javax.swing.event ChangeListener ChangeEvent)
+        '(java.lang Thread)
         )
 
 ;(:import [com.nativelibs4java.opencl CLContext CLByteBuffer CLMem CLMem$Usage CLEvent]
@@ -62,7 +63,9 @@
 )
 
 
-(println "hello there from randomnumberexplorer.clj file")
+(println "hello there from timelooper1.clj")
+
+
 
 
 
@@ -136,6 +139,79 @@ __kernel void randomnumbergen(
 (def kernelrandmoderoutput_clj (atom 14))
 (def innerloop_clj (atom 1))
 
+
+(quote threading work
+
+
+
+
+(def foo 12)
+(def foo {:a 1 :b 3})
+foo   ;this is the root binding
+(defn printfoo 
+   ([] (printfoo ""))  ;arity 0, calls self with arity 1
+   ([prefix]  (println prefix foo @kernelloopsize_clj)))
+   
+(printfoo)
+(printfoo "boo")
+
+(binding [foo 3] ;;binding macro , changes the value of foo within the scope of the binding only and within the thread from which binding is calledS, foo has not changed
+  (printfoo))
+(printfoo)   ;;outside foo is still its original
+
+(defn with-new-thread [f]
+ (.start (Thread. f)))
+  
+(with-new-thread 
+   (fn []  (printfoo "new thread")))
+
+(do (binding [foo "JO!"]
+      (with-new-thread (fn []  (printfoo "bound background")))   ;;values should be root binding, ie: the map
+      (printfoo "bound foreground")     ;;value should be the bound values, JO!
+      )
+    (printfoo "unbound foreground")    ;;values should be the root biding against.. the map.
+)
+(swap! kernelloopsize_clj (fn [] 3))
+
+
+(defn dothisstuff [f ms_sleeptime iterations]
+(with-new-thread (fn [] 
+                   (loop [k iterations]
+                      (do 
+                        (eval f)
+                        (Thread/sleep ms_sleeptime)
+                        (println "on a thread in itteration " k)
+                      (if (= k 1) nil (recur (dec k) )))))))
+                      
+(dothisstuff 1 100 10)
+(dothisstuff (printfoo "unbound foreground") 100 10)
+                   
+       
+
+WIP!!       
+(defn with-new-thread-foreverslowly [f ms_sleeptime iterations]
+ (.start (Thread. (fn [f ms_sleeptime iterations]
+                    (loop [k iterations]
+                      (do 
+                        f
+                        (Thread/sleep ms_sleeptime))
+                      (if (= k 1) nil (recur (dec k) ))))
+ 
+                      )))
+                      
+
+(with-new-thread-foreverslowly 1 100 10) 
+(with-new-thread-foreverslowly (printfoo "unbound foreground") 100 10)            
+(with-new-thread-foreverslowly (fn [] (printfoo "unbound foreground")) 100 10)
+
+
+
+
+
+
+)
+
+
 (defn runCL []      ;;this function is a quick copout to get the visualisation to work, I want to be inside a persistant inner openCL loop (in the middle below) so that the whole openCL machiery doesn't have to be restarted each time...
 (with-cl
   (with-program (compile-program sourceOpenCL)
@@ -179,6 +255,8 @@ __kernel void randomnumbergen(
     nil)
   ))
 )
+
+
 
 
 
@@ -276,7 +354,7 @@ __kernel void randomnumbergen(
 ;                             (.setText label
 ;                                (str "Slider: " val))))))	
 
-(def slider2 (doto (proxy [JSlider] [1 300 10] )
+(def slider2 (doto (proxy [JSlider] [1 200 90] )
                    ;(.setPreferredSize (new Dimension (* 10)(* 100)))    ;;Example constraints on layout...
                    ;(.setOrientation (. SwingConstants VERTICAL))        ;;Example of setting something, note SwingConstants had to be imported
                    (.addChangeListener  (proxy [ChangeListener] []    
@@ -356,7 +434,7 @@ __kernel void randomnumbergen(
              .show))
 
 
-(println "I'm at the end of randomnumberexplorer")
+(println "I'm at the end of timelooper1")
 (quote
 ;(.setLayout frame (GridBagLayout.)) ;; 
 ;(.setLayout slider (GridBagLayout.))
