@@ -137,8 +137,11 @@ __kernel void randomnumbergen(
 (def gloal_size_clj (* 512))
 (def kernelloopsize_clj (atom 2))
 (def kernelrandmoderoutput_clj (atom 14))
-(def innerloop_clj (atom 1))
+(def innerloop_clj (atom 5))
 
+(def runInnerOpenCL (atom false))
+(swap! runInnerOpenCL (fn [_] true))
+(swap! innerloop_clj (fn [_] 2000000))
 
 (quote threading work
 
@@ -163,6 +166,14 @@ foo   ;this is the root binding
  (.start (Thread. f)))
   
 (with-new-thread 
+   (fn [] (do
+             (Thread/sleep 3000)
+             (println "new thread")
+             nil   ;NOTE nil is needed else we get a null pointer expression
+             )))
+  
+  
+(with-new-thread 
    (fn []  (printfoo "new thread")))
 
 (do (binding [foo "JO!"]
@@ -172,7 +183,6 @@ foo   ;this is the root binding
     (printfoo "unbound foreground")    ;;values should be the root biding against.. the map.
 )
 (swap! kernelloopsize_clj (fn [] 3))
-
 
 (defn dothisstuff [f ms_sleeptime iterations]
 (with-new-thread (fn [] 
@@ -205,21 +215,58 @@ WIP!!
 (with-new-thread-foreverslowly (fn [] (printfoo "unbound foreground")) 100 10)
 
 
+;;should we do this with an agent that never returns?
 
+(defn with-new-thread [f & args]
+ (.start (Thread. (apply f args))))   ;TODO MAKE THIS VERIALE ARITY
 
+(with-new-thread 
+   (fn [x] (do
+             (Thread/sleep x)
+             (println "new thread" x)
+             nil
+             )) 1000)
+             
+((fn [x] (do
+             (Thread/sleep x)
+             (println "new thread")
+             nil
+             )) 1000)
 
+             
+(def runInnerOpenCL (atom false))
+(swap! runInnerOpenCL (fn [_] true))
 
-)
+(defmacro forever [& body] 
+  `(while true (do
+                 ~@body
+                (Thread/sleep 1)  ;;Adding this wait time makes this not suck up the whole CPU... it does only 1000 things can be passed in per second.
+                ))
+  
+(.start (Thread.
+          (fn [] (forever (while (= @runInnerOpenCL true)
+           (do
+             (println "I was waiting all that time")
+             (swap! runInnerOpenCL (fn [_] false))
+             (Thread/sleep 1)))))   ;This is bad, without the sleep it just heats up the CPU
+             ;making it stop
+))
+  
+
+);END OF quoted block
+
+(.start (new Thread (fn [] (println "Hello" (Thread/currentThread)))))
 
 
 (defn runCL []      ;;this function is a quick copout to get the visualisation to work, I want to be inside a persistant inner openCL loop (in the middle below) so that the whole openCL machiery doesn't have to be restarted each time...
+(swap! runInnerOpenCL (fn [_] true))
 (with-cl
   (with-program (compile-program sourceOpenCL)
     (let [gloal_size gloal_size_clj
-          InnerLoopCount innerloop_clj
+          InnerLoopCount innerloop_clj   ;;InnerLoopCount points to the top level atom innerloop_clj, thus it has the same value as the top level atom...
           kernelloopsize kernelloopsize_clj    ;note these are atoms holding the value.... this may be a very bad patern?
           kernelrandmoderoutput kernelrandmoderoutput_clj]
-        
+
         (println "about to onload buffer")
         (def startnanotime_bufferCreateTime (. System (nanoTime)))
           (def Buffer_int1   (create-buffer (* gloal_size @kernelloopsize) :int32  ))
@@ -229,23 +276,32 @@ WIP!!
 
         (def startnanotime_kerneltime (. System (nanoTime)))
           (loop [k @InnerLoopCount]
-                (do
-
-                        (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 @kernelloopsize @kernelrandmoderoutput)
-                        (enqueue-barrier)   ;Could load in a huge buffer a bloack at a time...
-                        ;;;Note, this is where out 'double buffer' will go, we'll keep swapping the state back and forth between 2 sets of buffers, each update is one time tick.
-                        (finish))
-                        
-                        
+;TODO Have data come in from the outside here, inside this loop, but conditionally, ie: only if the outside has make a change, also do not load (and let the old value of the Buffer be used)
+                  (if (= true @runInnerOpenCL) ;Not happy with this, would be nice to use something like a watch , will refactor eventually...
+                  ;;TODO Look for a more lisner like mechanisim rather then infinate slowed down loop....
+                    (do
+                      (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 @kernelloopsize @kernelrandmoderoutput)
+                      (enqueue-barrier)   ;Could load in a huge buffer a bloack at a time...
+                      ;;;Note, this is where out 'double buffer' will go, we'll keep swapping the state back and forth between 2 sets of buffers, each update is one time tick.
+                      (finish)
+                      (println "Done openCL inner work, countdowns left: " k)
+                  
+;TODO Have the readout be done conditionally when needed...
+                     (def startnanotime_bufferReadOutTime (. System (nanoTime)))
+                      (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+                      (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+                     ;(swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+                     (def endnanotime_bufferReadOutTime (. System (nanoTime)))
+                     (swap! runInnerOpenCL (fn [_] false))
+                   )
+                   (do
+                    ;(println "Skipped openCL inner work, countdowns left: " k)
+                    (Thread/sleep 1)   
+                   )
+                 )
             (if (= k 1) nil (recur (dec k) )))      ;;This seem like the correct time to enforce execution?!!
         (def endnanotime_kerneltime (. System (nanoTime)))
-        
-        (def startnanotime_bufferReadOutTime (. System (nanoTime)))
-          (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-          (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-          ;(swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-        (def endnanotime_bufferReadOutTime (. System (nanoTime)))
-        
+
         (enqueue-barrier) 
         (finish)
         (release! Buffer_int1)
@@ -256,6 +312,7 @@ WIP!!
   ))
 )
 
+(.start (new Thread runCL))
 
 
 
@@ -287,6 +344,7 @@ WIP!!
 (def counter (atom 0))
 
 (defn render [g]   ;note: 'g' is ?????
+  (def startnanotime_rendertime (. System (nanoTime)))
   (let [img (new BufferedImage (* scale dim) (* scale dim) 
                  (. BufferedImage TYPE_INT_ARGB))
         bg (. img (getGraphics))]
@@ -298,18 +356,23 @@ WIP!!
       (.drawRect 10 20 30 40)
       (.drawLine 15 (* 3 @counter) (* 2 @counter) @counter))
 
-    (dorun    ;;this draws many once pixel lines, no point drawing method :-)
-      (for [x (range (* 510)) ]
-          (doto bg
-            (.setColor (. Color red))
-            (.drawLine  (+ (nth @OpenCLoutputAtom1 x) 50)
-                      x 
-                      (+ (nth @OpenCLoutputAtom1 x) 50)
-                      x))))
+    (dorun    ;;this draws many one pixel lines, no point drawing method :-/
+      (for [y (range (* 1 )) ] 
+       (dorun
+         (for [x (range (* 510)) ]
+            (doto bg
+              (.setColor (. Color red))
+              (.drawLine  (+ (nth @OpenCLoutputAtom1 x) 50 y)
+                      (+ x y) ;;;NOTE becuase this atom is called twice, sometimes it gets swaped while the renderer runs, hence UI line artifacts when a the sliders already submited a new job while drawline is looping over the point range.
+                      (+ (nth @OpenCLoutputAtom1 x) 50 y)
+                      (+ x y)))))))
     
     (. g (drawImage img 0 0 nil))
     (. bg (dispose))
-    ))
+    )
+  (def endnanotime_rendertime (. System (nanoTime)))
+  (println "To Render, it takes ms:" (/ (- endnanotime_rendertime startnanotime_rendertime ) 1000000.0))
+)
 
 
 
@@ -327,7 +390,11 @@ WIP!!
                 ;    (GridBagConstraints. 1 1 1 1 1.0 1.0 (GridBagConstraints/WEST) (GridBagConstraints/BOTH) (Insets. 4 4 4 4) 0 0))
                  ))
 
-(def slider (doto (proxy [JSlider ] [1 300 90])
+
+
+;;TODO Put panel repain on a listener like loop too...  make it wait for runInnerOpenCL = false (but then next one could already have started...), take a copy of the contents of the atom, and visualise that... (but then that could be not inline with data in the cloders)... ok for delayed visualisation... slider should force a draw...
+
+(def slider (doto (proxy [JSlider ] [1 500 90])
                   (.addChangeListener  (proxy [ChangeListener] []    
                                          (stateChanged [evt]
                                            (let [val (.. evt getSource getValue)]
@@ -336,7 +403,8 @@ WIP!!
                                                 (swap! counter (fn [_] val))
                                                 (swap! kernelloopsize_clj (fn [_] val))
                                                ;; (swap! kernelrandmoderoutput_clj (fn [_] val))   ;;; Moved this to the second slider
-                                                (runCL)
+                                                (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just saw we want the work to get done, it will be done within 50ms... 
+;TODO Have the repaint happen on a different thread, continuously, with 50ms waits...
                                                 (.repaint panel)                         ;do 2nd thing
                                                 (println "slider got moved to value:" @counter )) ;do 3rd thing
                                                 ))))
@@ -354,14 +422,14 @@ WIP!!
 ;                             (.setText label
 ;                                (str "Slider: " val))))))	
 
-(def slider2 (doto (proxy [JSlider] [1 200 90] )
+(def slider2 (doto (proxy [JSlider] [1 500 90] )
                    ;(.setPreferredSize (new Dimension (* 10)(* 100)))    ;;Example constraints on layout...
                    ;(.setOrientation (. SwingConstants VERTICAL))        ;;Example of setting something, note SwingConstants had to be imported
                    (.addChangeListener  (proxy [ChangeListener] []    
                                          (stateChanged [evt]
                                            (let [val (.. evt getSource getValue)]
                                             (do (swap! kernelrandmoderoutput_clj (fn [_] val))
-                                                (runCL)
+                                                (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just saw we want the work to get done, it will be done within 50ms... 
                                                 (.repaint panel)                         ;do 2nd thing
                                                 (println "vertical slider got set to :" val )) ;do 3rd thing
                                                 ))))
@@ -400,7 +468,7 @@ WIP!!
 
 
 (defn frame []     ;;This is called from the core as entry point the UI and program
-        (runCL)    ;; This initiates everything openCL wise just before it is needed by the UI for the first time
+        (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just saw we want the work to get done, it will be done within 50ms...     ;; This initiates everything openCL wise just before it is needed by the UI for the first time
         (doto 
              ;(new JFrame "GridBagLayout Test" )   ;what is the difference between these?
              (proxy [JFrame] ["OpenCL  Multiply-with-carry Random number explorer"])
@@ -470,6 +538,9 @@ WIP!!
 
 
 )
+
+
+(in-ns 'LudoClojure.timelooper1.timelooper1)
 
 
 
