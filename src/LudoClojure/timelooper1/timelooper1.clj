@@ -140,8 +140,10 @@ __kernel void randomnumbergen(
 (def innerloop_clj (atom 5))
 
 (def runInnerOpenCL (atom false))
+(def run_reder_lock (atom true))
 (swap! runInnerOpenCL (fn [_] true))
 (swap! innerloop_clj (fn [_] 2000000))
+(def scanscreen (atom 1))
 
 (quote threading work
 
@@ -241,7 +243,7 @@ WIP!!
   `(while true (do
                  ~@body
                 (Thread/sleep 1)  ;;Adding this wait time makes this not suck up the whole CPU... it does only 1000 things can be passed in per second.
-                ))
+                )))
   
 (.start (Thread.
           (fn [] (forever (while (= @runInnerOpenCL true)
@@ -258,7 +260,7 @@ WIP!!
 (.start (new Thread (fn [] (println "Hello" (Thread/currentThread)))))
 
 
-(defn runCL []      ;;this function is a quick copout to get the visualisation to work, I want to be inside a persistant inner openCL loop (in the middle below) so that the whole openCL machiery doesn't have to be restarted each time...
+(defn runCL []      ;;TODO DONE:this function is a quick copout to get the visualisation to work, I want to be inside a persistant inner openCL loop (in the middle below) so that the whole openCL machiery doesn't have to be restarted each time...
 (swap! runInnerOpenCL (fn [_] true))
 (with-cl
   (with-program (compile-program sourceOpenCL)
@@ -343,6 +345,7 @@ WIP!!
 (def dim 120)
 (def counter (atom 0))
 
+
 (defn render [g]   ;note: 'g' is ?????
   (def startnanotime_rendertime (. System (nanoTime)))
   (let [img (new BufferedImage (* scale dim) (* scale dim) 
@@ -362,7 +365,7 @@ WIP!!
          (for [x (range (* 510)) ]
             (doto bg
               (.setColor (. Color red))
-              (.drawLine  (+ (nth @OpenCLoutputAtom1 x) 50 y)
+              (.drawLine  (+ (nth @OpenCLoutputAtom1 x) 50 @scanscreen)
                       (+ x y) ;;;NOTE becuase this atom is called twice, sometimes it gets swaped while the renderer runs, hence UI line artifacts when a the sliders already submited a new job while drawline is looping over the point range.
                       (+ (nth @OpenCLoutputAtom1 x) 50 y)
                       (+ x y)))))))
@@ -373,6 +376,11 @@ WIP!!
   (def endnanotime_rendertime (. System (nanoTime)))
   (println "To Render, it takes ms:" (/ (- endnanotime_rendertime startnanotime_rendertime ) 1000000.0))
 )
+
+
+
+
+
 
 
 
@@ -391,6 +399,30 @@ WIP!!
                  ))
 
 
+                 
+(defn reder_loop []
+(swap! run_reder_lock (fn [_] true))
+(loop [k @innerloop_clj]
+;TODO Have data come in from the outside here, inside this loop, but conditionally, ie: only if the outside has make a change, also do not load (and let the old value of the Buffer be used)
+                 (if (= true @run_reder_lock) ;Not happy with this, would be nice to use something like a watch , will refactor eventually...
+                  ;;TODO Look for a more lisner like mechanisim rather then infinate slowed down loop....
+                   (do 
+                     (swap! run_reder_lock (fn [_] false))
+                     (println @scanscreen)
+                     (swap! scanscreen (fn [x] (mod (inc x) 100)))
+                     (.repaint panel)
+                     
+                   )
+                   (do
+                     ;(println "Skipped openCL inner work, countdowns left: " k)
+                     (Thread/sleep 1)   
+                   )
+                 )
+            (if (= k 1) nil (recur (dec k) )))
+)
+
+(.start (new Thread reder_loop))
+
 
 ;;TODO Put panel repain on a listener like loop too...  make it wait for runInnerOpenCL = false (but then next one could already have started...), take a copy of the contents of the atom, and visualise that... (but then that could be not inline with data in the cloders)... ok for delayed visualisation... slider should force a draw...
 
@@ -405,7 +437,8 @@ WIP!!
                                                ;; (swap! kernelrandmoderoutput_clj (fn [_] val))   ;;; Moved this to the second slider
                                                 (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just saw we want the work to get done, it will be done within 50ms... 
 ;TODO Have the repaint happen on a different thread, continuously, with 50ms waits...
-                                                (.repaint panel)                         ;do 2nd thing
+                                                (swap! run_reder_lock (fn [_] true))
+                                                ;(.repaint panel)                         ;do 2nd thing
                                                 (println "slider got moved to value:" @counter )) ;do 3rd thing
                                                 ))))
             ; (.setPreferredSize (new Dimension (* scale 20)(* scale 40)))
@@ -430,7 +463,8 @@ WIP!!
                                            (let [val (.. evt getSource getValue)]
                                             (do (swap! kernelrandmoderoutput_clj (fn [_] val))
                                                 (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just saw we want the work to get done, it will be done within 50ms... 
-                                                (.repaint panel)                         ;do 2nd thing
+                                                (swap! run_reder_lock (fn [_] true))
+                                                ;(.repaint panel)                         ;do 2nd thing
                                                 (println "vertical slider got set to :" val )) ;do 3rd thing
                                                 ))))
               ))
@@ -444,7 +478,8 @@ WIP!!
 (def button (doto (JButton. "Add 1")
                   (on-action evnt  ;; evnt is not used here
                     (.setText label (str "Counter: " (swap! counter inc)))
-                    (.repaint panel)
+                    (swap! run_reder_lock (fn [_] true))
+                    ;(.repaint panel)
                     (println "action jbuton click happened"))
                 ;This is the macro expanded equivalent
                   ;(.addActionListener        
