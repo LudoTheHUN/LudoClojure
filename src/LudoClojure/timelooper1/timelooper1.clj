@@ -147,9 +147,6 @@ __kernel void randomnumbergen(
 
 (quote threading work
 
-
-
-
 (def foo 12)
 (def foo {:a 1 :b 3})
 foo   ;this is the root binding
@@ -197,10 +194,9 @@ foo   ;this is the root binding
                       
 (dothisstuff 1 100 10)
 (dothisstuff (printfoo "unbound foreground") 100 10)
-                   
-       
 
-WIP!!       
+
+WIP!!
 (defn with-new-thread-foreverslowly [f ms_sleeptime iterations]
  (.start (Thread. (fn [f ms_sleeptime iterations]
                     (loop [k iterations]
@@ -281,7 +277,8 @@ WIP!!
 ;TODO Have data come in from the outside here, inside this loop, but conditionally, ie: only if the outside has make a change, also do not load (and let the old value of the Buffer be used)
                   (if (= true @runInnerOpenCL) ;Not happy with this, would be nice to use something like a watch , will refactor eventually...
                   ;;TODO Look for a more lisner like mechanisim rather then infinate slowed down loop....
-                    (do
+                    (let
+                      [inbuffer1 (wrap @OpenCLoutputAtom1 :int32)]
                       (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 @kernelloopsize @kernelrandmoderoutput)
                       (enqueue-barrier)   ;Could load in a huge buffer a bloack at a time...
                       ;;;Note, this is where out 'double buffer' will go, we'll keep swapping the state back and forth between 2 sets of buffers, each update is one time tick.
@@ -351,9 +348,12 @@ WIP!!
   (let [img (new BufferedImage (* scale dim) (* scale dim) 
                  (. BufferedImage TYPE_INT_ARGB))
         bg (. img (getGraphics))]
+   ;Screen clearing
+   (if (= @scanscreen 0)
     (doto bg
       (.setColor (. Color white))
       (.fillRect 0 0 (. img (getWidth)) (. img (getHeight))))
+    )
     (doto bg
       (.setColor (. Color blue))
       (.drawRect 10 20 30 40)
@@ -364,19 +364,22 @@ WIP!!
        (dorun
          (for [x (range (* 510)) ]
             (doto bg
-              (.setColor (. Color red))
-              (.drawLine  (+ (nth @OpenCLoutputAtom1 x) 50 @scanscreen)
-                      (+ x y) ;;;NOTE becuase this atom is called twice, sometimes it gets swaped while the renderer runs, hence UI line artifacts when a the sliders already submited a new job while drawline is looping over the point range.
-                      (+ (nth @OpenCLoutputAtom1 x) 50 y)
-                      (+ x y)))))))
+              ;(.setColor (. Color red))
+              (.setColor (new Color (mod @scanscreen 255) (mod x 255) (mod (nth @OpenCLoutputAtom1 x) 255)))
+              (.drawLine  
+                          (+ y @scanscreen) ;;;NOTE becuase this atom is called twice, sometimes it gets swaped while the renderer runs, hence UI line artifacts when a the sliders already submited a new job while drawline is looping over the point range.
+                          (+ (nth @OpenCLoutputAtom1 x) 50)
+                          (+ y @scanscreen)
+                          (+ (nth @OpenCLoutputAtom1 x) 50 y)
+
+                          ))))))
     
     (. g (drawImage img 0 0 nil))
     (. bg (dispose))
     )
   (def endnanotime_rendertime (. System (nanoTime)))
-  (println "To Render, it takes ms:" (/ (- endnanotime_rendertime startnanotime_rendertime ) 1000000.0))
+  ;(println "To Render, it takes ms:" (/ (- endnanotime_rendertime startnanotime_rendertime ) 1000000.0))
 )
-
 
 
 
@@ -387,7 +390,8 @@ WIP!!
 (def label (JLabel. "Counter: 0"))
 
 (def panel (doto (proxy [JPanel] []
-                        (paint [g] (render g)))   ;;'paint'  is a method inhereted from JComponent
+                        (paint [g] (render g))
+                        )   ;;'paint'  is a method inhereted from JComponent
                  (.setPreferredSize (new Dimension      ; '.setPreferredSize'  is also a method inhereted from JComponent
                                      (* scale dim)
                                      (* scale dim)))
@@ -401,17 +405,17 @@ WIP!!
 
                  
 (defn reder_loop []
-(swap! run_reder_lock (fn [_] true))
+(swap! run_reder_lock (fn [_] false))
 (loop [k @innerloop_clj]
 ;TODO Have data come in from the outside here, inside this loop, but conditionally, ie: only if the outside has make a change, also do not load (and let the old value of the Buffer be used)
                  (if (= true @run_reder_lock) ;Not happy with this, would be nice to use something like a watch , will refactor eventually...
                   ;;TODO Look for a more lisner like mechanisim rather then infinate slowed down loop....
                    (do 
-                     (swap! run_reder_lock (fn [_] false))
-                     (println @scanscreen)
-                     (swap! scanscreen (fn [x] (mod (inc x) 100)))
+                     (swap! run_reder_lock (fn [_] true))
+                     ;(println @scanscreen)
+                     (swap! scanscreen (fn [x] (mod (inc x) 500)))
                      (.repaint panel)
-                     
+                     (Thread/sleep 20)
                    )
                    (do
                      ;(println "Skipped openCL inner work, countdowns left: " k)
