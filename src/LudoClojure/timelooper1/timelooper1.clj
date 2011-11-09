@@ -92,30 +92,57 @@
 (def sourceOpenCL
   "
 
+int xpos(int nid, int xsize, int yzise)
+{
+return nid % xsize;
+}
+
+int ypos(int nid, int xsize, int yzise)
+{
+return nid / xsize;
+}
+
+
+  
 __kernel void randomnumbergen(
-    __global uint *output_i,
-    __global uint *output_mz,
-    const unsigned int kernelloopsize,
-    const unsigned int kernelrandmoderoutput
+    __global int *output_i,
+    __global int *output_mz,
+    __global float *neuron_prop1a,
+    __global float *neuron_prop1b,
+    const int kernelloopsize,
+    const int kernelrandmoderoutput
     )
 {
     int gid = get_global_id(0);
     int gsize = get_global_size(0);
 
     int iatom;
-    uint m_z = gid + 1;  //random number initial seed, this is needed per each kernel execution so that random number created are all different, else each kernel would produce same set of randoms
-    uint m_w = 1;
+    int synapse_from_nid;
+    float neuron_prop1 = 1.0f ;
+    
+    int m_z = gid + 1;  //random number initial seed, this is needed per each kernel execution so that random number created are all different, else each kernel would produce same set of randoms
+    int m_w = 1;
+    
+    
+    
 
     for(iatom = 0; iatom < kernelloopsize; iatom+=1 )
     {
         m_z = 36969 * (m_z & 65535) + (m_z >> 16);
         m_w = 18000 * (m_w & 65535) + (m_w >> 16);
 
-        output_i[gid*kernelloopsize + iatom ] = ((m_z << 16) + m_w)  % kernelrandmoderoutput;      //This is the random number being created. Note the mod operation %, this makes it easy to create a random in some range...
-        output_mz[gid*kernelloopsize + iatom ] = m_z;
+        int output_i_id = gid*kernelloopsize + iatom;
+        int outvalue = ((m_z << 16) + m_w)  % 100;
+        output_i[output_i_id] = outvalue;      //This is the random number being created. Note the mod operation %, this makes it easy to create a random in some range...
+                                                                      //kernelrandmoderoutput is the second slider...
+        //output_mz[gid*kernelloopsize + iatom ] = m_z;
         //Further neuron code goes within this loop. This loop is per neuron, each random number + some transform function on the random number is the proceduraly generated LSM synapse to resultand neuron pointers.
         //Will need reducer like logic... with probably +=
+        //synapse_from_nid = ((m_z << 16) + m_w)  % gsize;
+        //neuron_prop1 = neuron_prop1 + neuron_prop1a[synapse_from_nid];   //need a sygmoid here + inhibatory connections
+        
     }
+    neuron_prop1b[gid] = neuron_prop1a[gid] + 1.0;
 }
   ")
   
@@ -123,6 +150,7 @@ __kernel void randomnumbergen(
 (def OpenCLoutputAtom2 (atom [1]))
 (def OpenCLoutputAtom3 (atom [1]))
 
+(def neuron_prop1_clj (atom [1]))
 
 
 ;m_w = <choose-initializer>;    /* must not be zero */
@@ -135,7 +163,8 @@ __kernel void randomnumbergen(
 ;    return (m_z << 16) + m_w;  /* 32-bit result */
 ;}
 (def gloal_size_clj (* 512))
-(def kernelloopsize_clj (atom 2))
+;TODO make UI and openCL run on one global simulation size.
+(def kernelloopsize_clj (atom 1))
 (def kernelrandmoderoutput_clj (atom 14))
 (def innerloop_clj (atom 5))
 
@@ -144,6 +173,8 @@ __kernel void randomnumbergen(
 (swap! runInnerOpenCL (fn [_] true))
 (swap! innerloop_clj (fn [_] 2000000))
 (def scanscreen (atom 1))
+
+;;TODO Too many atoms?? should these not be just def/refs?
 
 (quote threading work
 
@@ -267,8 +298,10 @@ WIP!!
 
         (println "about to onload buffer")
         (def startnanotime_bufferCreateTime (. System (nanoTime)))
-          (def Buffer_int1   (create-buffer (* gloal_size @kernelloopsize) :int32  ))
-          (def Buffer_int2   (create-buffer (* gloal_size @kernelloopsize) :int32  ))
+          (def Buffer_int1     (create-buffer (* gloal_size @kernelloopsize) :int32  ))
+          (def Buffer_int2     (create-buffer (* gloal_size @kernelloopsize) :int32  ))
+          (def neuron_prop1a   (create-buffer gloal_size :float32  ))
+          (def neuron_prop1b   (create-buffer gloal_size :float32  ))
           (enqueue-barrier) (finish)
         (def endnanotime_bufferCreateTime (. System (nanoTime)))
 
@@ -279,18 +312,25 @@ WIP!!
                   ;;TODO Look for a more lisner like mechanisim rather then infinate slowed down loop....
                     (let
                       [inbuffer1 (wrap @OpenCLoutputAtom1 :int32)]
-                      (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 @kernelloopsize @kernelrandmoderoutput)
-                      (enqueue-barrier)   ;Could load in a huge buffer a bloack at a time...
+                      (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 neuron_prop1a neuron_prop1b @kernelloopsize @kernelrandmoderoutput)
+                      (enqueue-barrier)(finish)   ;Could load in a huge buffer a bloack at a time...
+                      (Thread/sleep 1)  
+                      (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 neuron_prop1b neuron_prop1a @kernelloopsize @kernelrandmoderoutput)
+                      (enqueue-barrier)(finish)   ;Could load in a huge buffer a bloack at a time...                      
                       ;;;Note, this is where out 'double buffer' will go, we'll keep swapping the state back and forth between 2 sets of buffers, each update is one time tick.
                       (finish)
                       (println "Done openCL inner work, countdowns left: " k)
                   
 ;TODO Have the readout be done conditionally when needed...
-                     (def startnanotime_bufferReadOutTime (. System (nanoTime)))
-                      (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-                      (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 511])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+                      (def startnanotime_bufferReadOutTime (. System (nanoTime)))
+                      (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 gloal_size])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+                      (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 gloal_size])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
                      ;(swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-                     (def endnanotime_bufferReadOutTime (. System (nanoTime)))
+                      (Thread/sleep 20)   
+                      (swap! neuron_prop1_clj (fn [foo] (^floats float-array (deref (enqueue-read neuron_prop1b [0 gloal_size])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
+                      (enqueue-barrier)(finish)
+                      (Thread/sleep 20)   
+                      (def endnanotime_bufferReadOutTime (. System (nanoTime)))
                      (swap! runInnerOpenCL (fn [_] false))
                    )
                    (do
@@ -358,11 +398,11 @@ WIP!!
       (.setColor (. Color blue))
       (.drawRect 10 20 30 40)
       (.drawLine 15 (* 3 @counter) (* 2 @counter) @counter))
-
+;TODO rip this out into a function call if possible without messing about with the bg oject too much
     (dorun    ;;this draws many one pixel lines, no point drawing method :-/
       (for [y (range (* 1 )) ] 
        (dorun
-         (for [x (range (* 510)) ]
+         (for [x (range (- gloal_size_clj 1)) ]
             (doto bg
               ;(.setColor (. Color red))
               (.setColor (new Color (mod @scanscreen 255) (mod x 255) (mod (nth @OpenCLoutputAtom1 x) 255)))
@@ -383,7 +423,7 @@ WIP!!
 
 
 
-
+;(map  (fn [x] (nth @OpenCLoutputAtom1 x))(range 0 gloal_size_clj))
 
 
 
@@ -430,7 +470,7 @@ WIP!!
 
 ;;TODO Put panel repain on a listener like loop too...  make it wait for runInnerOpenCL = false (but then next one could already have started...), take a copy of the contents of the atom, and visualise that... (but then that could be not inline with data in the cloders)... ok for delayed visualisation... slider should force a draw...
 
-(def slider (doto (proxy [JSlider ] [1 500 90])
+(def slider (doto (proxy [JSlider ] [1 500 5])
                   (.addChangeListener  (proxy [ChangeListener] []    
                                          (stateChanged [evt]
                                            (let [val (.. evt getSource getValue)]
@@ -442,6 +482,9 @@ WIP!!
                                                 (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just saw we want the work to get done, it will be done within 50ms... 
 ;TODO Have the repaint happen on a different thread, continuously, with 50ms waits...
                                                 (swap! run_reder_lock (fn [_] true))
+                                                (Thread/sleep 10)
+                                                (println (map  (fn [x] (nth @neuron_prop1_clj x))(range 0 100)))
+                                                
                                                 ;(.repaint panel)                         ;do 2nd thing
                                                 (println "slider got moved to value:" @counter )) ;do 3rd thing
                                                 ))))
@@ -459,7 +502,7 @@ WIP!!
 ;                             (.setText label
 ;                                (str "Slider: " val))))))	
 
-(def slider2 (doto (proxy [JSlider] [1 500 90] )
+(def slider2 (doto (proxy [JSlider] [1 500 5] )
                    ;(.setPreferredSize (new Dimension (* 10)(* 100)))    ;;Example constraints on layout...
                    ;(.setOrientation (. SwingConstants VERTICAL))        ;;Example of setting something, note SwingConstants had to be imported
                    (.addChangeListener  (proxy [ChangeListener] []    
@@ -581,6 +624,6 @@ WIP!!
 
 (in-ns 'LudoClojure.timelooper1.timelooper1)
 
-
+(println (map  (fn [x] (nth @neuron_prop1_clj x))(range 0 100)))
 
 
