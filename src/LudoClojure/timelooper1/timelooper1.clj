@@ -114,27 +114,44 @@ __kernel void randomnumbergen(
     )
 {
     int gid = get_global_id(0);
+    int gid2 = get_global_id(0);
     int gsize = get_global_size(0);
+    int gsize_by_2 = gsize / 2;
 
     int iatom;
     int synapse_from_nid;
-    float neuron_prop1 = 1.0f ;
-    
-    int m_z = gid + 1;  //random number initial seed, this is needed per each kernel execution so that random number created are all different, else each kernel would produce same set of randoms
-    int m_w = 1;
+    float neuron_prop1 = 0.0 ;
     
     
     
+    uint m_z = gid + 1;  //random number initial seed, this is needed per each kernel execution so that random number created are all different, else each kernel would produce same set of randoms
+    uint m_w = 1;
+    
+    
+    barrier(CLK_LOCAL_MEM_FENCE);
 
     for(iatom = 0; iatom < kernelloopsize; iatom+=1 )
     {
         m_z = 36969 * (m_z & 65535) + (m_z >> 16);
         m_w = 18000 * (m_w & 65535) + (m_w >> 16);
 
-        int output_i_id = gid*kernelloopsize + iatom;
-        int outvalue = ((m_z << 16) + m_w)  % 100;
-        output_i[output_i_id] = outvalue;      //This is the random number being created. Note the mod operation %, this makes it easy to create a random in some range...
-                                                                      //kernelrandmoderoutput is the second slider...
+        int output_i_id = (gid2 * kernelloopsize) + iatom;
+        uint random_value = ((m_z << 16) + m_w)  % 50;
+        
+        output_i[output_i_id] = random_value;      //This is the random number being created. Note the mod operation %, this makes it easy to create a random in some range...
+        
+        if (random_value <= 25) {
+        neuron_prop1 += neuron_prop1 + neuron_prop1a[random_value];
+        }
+        if (random_value > 40) {
+        neuron_prop1 += neuron_prop1 - neuron_prop1a[random_value];
+        }
+        
+        //Any writing out of bounds of an array corrupts memory further afield!!!
+        // Note: ANY writing to the same location causes a catastrophic result fail
+        
+        
+        //kernelrandmoderoutput is the second slider...
         //output_mz[gid*kernelloopsize + iatom ] = m_z;
         //Further neuron code goes within this loop. This loop is per neuron, each random number + some transform function on the random number is the proceduraly generated LSM synapse to resultand neuron pointers.
         //Will need reducer like logic... with probably +=
@@ -142,7 +159,10 @@ __kernel void randomnumbergen(
         //neuron_prop1 = neuron_prop1 + neuron_prop1a[synapse_from_nid];   //need a sygmoid here + inhibatory connections
         
     }
-    neuron_prop1b[gid] = neuron_prop1a[gid] + 1.0;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    neuron_prop1b[gid] = (1.0 / (1.0 + exp( -1.0 * neuron_prop1))) +0.0000001;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
 }
   ")
   
@@ -298,8 +318,8 @@ WIP!!
 
         (println "about to onload buffer")
         (def startnanotime_bufferCreateTime (. System (nanoTime)))
-          (def Buffer_int1     (create-buffer (* gloal_size @kernelloopsize) :int32  ))
-          (def Buffer_int2     (create-buffer (* gloal_size @kernelloopsize) :int32  ))
+          (def Buffer_int1     (create-buffer (* gloal_size 1000 2) :int32  ))
+          (def Buffer_int2     (create-buffer (* gloal_size 1000 2) :int32  ))
           (def neuron_prop1a   (create-buffer gloal_size :float32  ))
           (def neuron_prop1b   (create-buffer gloal_size :float32  ))
           (enqueue-barrier) (finish)
@@ -314,7 +334,7 @@ WIP!!
                       [inbuffer1 (wrap @OpenCLoutputAtom1 :int32)]
                       (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 neuron_prop1a neuron_prop1b @kernelloopsize @kernelrandmoderoutput)
                       (enqueue-barrier)(finish)   ;Could load in a huge buffer a bloack at a time...
-                      (Thread/sleep 1)  
+                      ;;(Thread/sleep 10)  
                       (enqueue-kernel :randomnumbergen gloal_size Buffer_int1 Buffer_int2 neuron_prop1b neuron_prop1a @kernelloopsize @kernelrandmoderoutput)
                       (enqueue-barrier)(finish)   ;Could load in a huge buffer a bloack at a time...                      
                       ;;;Note, this is where out 'double buffer' will go, we'll keep swapping the state back and forth between 2 sets of buffers, each update is one time tick.
@@ -326,10 +346,11 @@ WIP!!
                       (swap! OpenCLoutputAtom1 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int1 [0 gloal_size])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
                       (swap! OpenCLoutputAtom2 (fn [foo] (^ints int-array (deref (enqueue-read Buffer_int2 [0 gloal_size])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
                      ;(swap! OpenCLoutputAtom3 (fn [foo] (^floats float-array (deref (enqueue-read Buffer_float [0 4])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
-                      (Thread/sleep 20)   
+                      (enqueue-barrier)(finish)
+                      ;;(Thread/sleep 20)   
                       (swap! neuron_prop1_clj (fn [foo] (^floats float-array (deref (enqueue-read neuron_prop1b [0 gloal_size])))))  ;OPTIMAL READOUT, WORNING!! this APPENDS extra data to a float-array
                       (enqueue-barrier)(finish)
-                      (Thread/sleep 20)   
+                      ;;(Thread/sleep 20)   
                       (def endnanotime_bufferReadOutTime (. System (nanoTime)))
                      (swap! runInnerOpenCL (fn [_] false))
                    )
@@ -625,5 +646,20 @@ WIP!!
 (in-ns 'LudoClojure.timelooper1.timelooper1)
 
 (println (map  (fn [x] (nth @neuron_prop1_clj x))(range 0 100)))
+
+(quote ;some alternatvies....
+
+(def vec1 (atom []))
+
+
+(swap! vec1 (fn [x] (conj x (atom [1]))))
+
+(swap! (nth @vec1 5) (fn [x] 8))
+
+;;Does this scale + paralelize... how well...
+)
+
+
+
 
 
