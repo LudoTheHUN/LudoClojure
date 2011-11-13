@@ -198,6 +198,7 @@ __kernel void randomnumbergen(
 
 (quote threading work
 
+win9test
 (def foo 12)
 (def foo {:a 1 :b 3})
 foo   ;this is the root binding
