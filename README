@@ -20,6 +20,25 @@ Findings:
 -main function needs to be at the end of the 
 .../src/LudoClojure/core.clj   else everything breaks...
 
+## BIG TODOs:
+Tool up!
+  Consider Eclipse with clojure plugin.   ...urgh, just try it.
+  Have a look at Casandra?
+Wrap openCL functionality further.
+  DSL for openCL transformations over neuros, think openCL kernel writng, based on minimal defining statements.
+  Wrap around the onloading, offloading of data into clojure (or java) datatypes.
+Use Clojure better
+  Break out into modules, UI shoudl live somewhere else, too much OO crud.
+  Be sure you are 'doing it right'
+  
+Structure
+  Define the program data structures.
+  Make them complex to allow for growth (maps, arrays)
+    Think of partially ordered sets
+  Seperate out state
+    Use persistant data structure where possible
+
+
 ## Usage
 
 Don't use it
