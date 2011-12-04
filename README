@@ -2,7 +2,7 @@
 
 LudoClojure
 
-::If will not start a singularity, it is not worth programming (for fun)::
+::If it will not start a singularity, it is not worth programming.::
 This is my attempt to learn Clojure, while applying it to the most difficult problem I could think of:
 ie: "write a program that will play any game, meaningfully."
 Some guiding thoughts:
