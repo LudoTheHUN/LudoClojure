@@ -26,6 +26,7 @@ java -Xmx1028m -jar LudoClojure-1.0.0-SNAPSHOT-standalone.jar
 Note, if using lein uberjar, files OCHAFIK2.DSA and OCHAFIK2.SF will have to be removed from 
 LudoClojure-1.0.0-SNAPSHOT-standalone.jar/META-INF/
 to work around a bug related to https://github.com/technomancy/leiningen/issues/31
+You can use WinRar to do this...
 
 Findings:
 -main function needs to be at the end of the 
