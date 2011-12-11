@@ -28,6 +28,16 @@ LudoClojure-1.0.0-SNAPSHOT-standalone.jar/META-INF/
 to work around a bug related to https://github.com/technomancy/leiningen/issues/31
 You can use WinRar to do this...
 
+To Develop:
+Option A) Use any text editor... Notepad++ was used upto mid dec2011.
+Option B) Use eclipse. dev-dependencies added so:
+           1) git clone
+           2) run: lein deps
+           3) run: lein eclipse
+           4) instal 'counterclockwise' in eclipse
+           5) point eclipse to the project.
+
+
 Findings:
 -main function needs to be at the end of the 
 .../src/LudoClojure/core.clj   else everything breaks...
