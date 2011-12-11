@@ -30,7 +30,7 @@ You can use WinRar to do this...
 
 To Develop:
 Option A) Use any text editor... Notepad++ was used upto mid dec2011.
-Option B) Use eclipse. dev-dependencies added so:
+Option B) Use eclipse. dev-dependencies added so: get eclipse, I used: eclipse-java-indigo-SR1-win32-x86_64
            1) git clone
            2) run: lein deps
            3) run: lein eclipse
