@@ -45,7 +45,7 @@ Findings:
 
 ## BIG TODOs:
 Tool up!
-  Consider Eclipse with clojure plugin.   ...urgh, just try it, however good notepad++ is.
+  DONE: Consider Eclipse with clojure plugin.   ...urgh, just try it, however good notepad++ is.
   Have a look at Casandra?
   Have a look at Storm https://github.com/nathanmarz/storm/wiki/Clojure-DSL
 Wrap openCL functionality further.
