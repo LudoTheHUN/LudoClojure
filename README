@@ -2,23 +2,79 @@
 
 LudoClojure
 
+::If it will not start a singularity, it is not worth programming.::
+This is my attempt to learn Clojure, while applying it to the most difficult problem I could think of:
+ie: "write a program that will play any game, meaningfully."
+Some guiding thoughts:
+http://www.lsm.tugraz.at/papers/lsm-nc-130.pdf
+http://www.idsia.ch/~juergen/sice2009.pdf
+
+
 .
 To get working from zero:
-Follow instruction here first
-https://github.com/citizen428/ClojureX
-
-... OR just use "lain repl"
+Set up 'lain', Down load it and place it here /usr/local/bin/ (or some such) , give it executable permission 
+just use "lain repl" when in the project folder
 Then...
-Set up 'lain', Down load it and place it here /usr/local/bin/ , give it executable permission 
 
-To use,  Run this:
+To run stuff, try:
 lein test
 lein uberjar
-java -jar LudoClojure-1.0.0-SNAPSHOT-standalone.jar
+java -jar LudoClojure-1.0.0-SNAPSHOT-standalone.jar 1
+
+To run do:
+java -Xmx1028m -jar LudoClojure-1.0.0-SNAPSHOT-standalone.jar
+Note, if using lein uberjar, files OCHAFIK2.DSA and OCHAFIK2.SF will have to be removed from 
+LudoClojure-1.0.0-SNAPSHOT-standalone.jar/META-INF/
+to work around a bug related to https://github.com/technomancy/leiningen/issues/31
+You can use WinRar to do this...
+
+To Develop:
+Option A) Use any text editor... Notepad++ was used upto mid dec2011.
+Option B) Use eclipse. dev-dependencies added so:
+           1) git clone
+           2) run: lein deps
+           3) run: lein eclipse
+           4) instal 'counterclockwise' in eclipse
+           5) point eclipse to the project.
+
 
 Findings:
 -main function needs to be at the end of the 
 .../src/LudoClojure/core.clj   else everything breaks...
+
+
+## BIG TODOs:
+Tool up!
+  Consider Eclipse with clojure plugin.   ...urgh, just try it, however good notepad++ is.
+  Have a look at Casandra?
+  Have a look at Storm https://github.com/nathanmarz/storm/wiki/Clojure-DSL
+Wrap openCL functionality further.
+  DSL for openCL transformations over neurons, think openCL kernel writng + executing, wrapped, based on minimal defining statements.
+  Wrap around the onloading, offloading of data into clojure (or java) datatypes into openCL
+  Drop openCL? Go lisp only? Let Moore take care of performace hit?... or hide openCL completely so it does not matter?
+  Break kernel operations down so that each enqueue-kernel does very little work that is very specific, dum and DSL'able?
+    Identify simplest operations, think of map-reduce stages?
+Use Clojure better
+  Break out into files per focus area, (ns) is your friend
+    UI should live somewhere else, too much OO crud near swing.
+  Use paralelisim, safely.
+  Be sure you are 'doing it right', go idiomatic.
+Structure
+  Define the program data structures
+    And keep it open ended
+  Make them complex to allow for growth (maps, arrays)
+    Think of partially ordered sets
+    Think through if labda calculus can help to 'compose' Liquid State Machine itterations.
+  Seperate out state
+    Use persistant data structure where possible
+Think process level paralisim
+  A single GPU will not be enough, for a while yet.
+Testing
+  Always last on the list
+  Find ways to make it the first thing on the list
+  Teset the code
+  Test the behaviour...
+    How??
 
 ## Usage
 
@@ -30,8 +86,4 @@ Copyright (C) 2011 LudoTheHUN
 
 Distributed under the Eclipse Public License, the same as Clojure.
 
-To run do:
-java -Xmx1028m -jar LudoClojure-1.0.0-SNAPSHOT-standalone.jar
-Note, if using lein uberjar, files OCHAFIK2.DSA and OCHAFIK2.SF will have to be removed from 
-LudoClojure-1.0.0-SNAPSHOT-standalone.jar/META-INF/
-to work around a bug related to https://github.com/technomancy/leiningen/issues/31
+
