@@ -4,7 +4,7 @@
  
   (:require clojure.contrib.duck-streams )   ;needed for serde
   (:require clojure.contrib.seq-utils)       ;needed for serde
-  (:require [LudoClojure.randomnumberexplorer.randomnumerexplorer :as UI1])
+  ;(:require [LudoClojure.randomnumberexplorer.randomnumerexplorer :as UI1])
   (:require [LudoClojure.timelooper1.timelooper1 :as UI2])
 
   (:gen-class))
@@ -51,11 +51,12 @@
 
 (defn -main [& args]
   (println "Please run with options:
-           1: Random number generator with data sourced from openCL")
+           1: Random number generator with data sourced from openCL
+		   2: Funk renderer, leading to neuron readout scaner...")
   (println (hello args))
   (when (=  (str (first args)) "1") (do 
                                     (println "option1 selcted")
-                                    (UI1/frame)
+                                    ;(UI1/frame)
                                     ))
   (when (=  (str (first args)) "2") (do 
                                     (println "option2 selcted")
@@ -90,7 +91,7 @@
 ;Yup, I'm crazy too :-)  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
 
 
-(in-ns 'LudoClojure.timelooper1.timelooper1)
+;(in-ns 'LudoClojure.timelooper1.timelooper1)
 
 
 

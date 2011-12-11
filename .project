@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+  <name>LudoClojure</name>
+  <comment>This project is designed to be a practical walk through of all the pain points of writing a Clojure application, hopefully keeping track of aha moments relatd to namespaces, adding dependencies, libs, testing and Clojure specifics and benchmarking</comment>
+  <projects/>
+  <buildSpec>
+    <buildCommand>
+      <name>ccw.builder</name>
+      <arguments/>
+    </buildCommand>
+    <buildCommand>
+      <name>org.eclipse.jdt.core.javabuilder</name>
+      <arguments/>
+    </buildCommand>
+  </buildSpec>
+  <natures>
+    <nature>ccw.nature</nature>
+    <nature>org.eclipse.jdt.core.javanature</nature>
+  </natures>
+</projectDescription>

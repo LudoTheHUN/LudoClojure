@@ -103,6 +103,7 @@ return nid / xsize;
 }
 
 
+
   
 __kernel void randomnumbergen(
     __global int *output_i,
@@ -307,7 +308,7 @@ WIP!!
 
 (.start (new Thread (fn [] (println "Hello" (Thread/currentThread)))))
 
-
+;;TODO  looking to using macros to abstact these components out. (creating buffers, main loop, onloading, offloading)
 (defn runCL []      ;;TODO DONE:this function is a quick copout to get the visualisation to work, I want to be inside a persistant inner openCL loop (in the middle below) so that the whole openCL machiery doesn't have to be restarted each time...
 (swap! runInnerOpenCL (fn [_] true))
 (with-cl
@@ -353,11 +354,11 @@ WIP!!
                       (enqueue-barrier)(finish)
                       ;;(Thread/sleep 20)   
                       (def endnanotime_bufferReadOutTime (. System (nanoTime)))
-                     (swap! runInnerOpenCL (fn [_] false))
+                      (swap! runInnerOpenCL (fn [_] false))
                    )
                    (do
                     ;(println "Skipped openCL inner work, countdowns left: " k)
-                    (Thread/sleep 1)   
+                    (Thread/sleep 1)
                    )
                  )
             (if (= k 1) nil (recur (dec k) )))      ;;This seem like the correct time to enforce execution?!!
@@ -442,9 +443,6 @@ WIP!!
   (def endnanotime_rendertime (. System (nanoTime)))
   ;(println "To Render, it takes ms:" (/ (- endnanotime_rendertime startnanotime_rendertime ) 1000000.0))
 )
-
-
-
 ;(map  (fn [x] (nth @OpenCLoutputAtom1 x))(range 0 gloal_size_clj))
 
 
@@ -572,7 +570,7 @@ WIP!!
 
 
 (defn frame []     ;;This is called from the core as entry point the UI and program
-        (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just saw we want the work to get done, it will be done within 50ms...     ;; This initiates everything openCL wise just before it is needed by the UI for the first time
+        (swap! runInnerOpenCL (fn [_] true)) ;;This used to be (runCL), but now we just say we want the work to get done, it will be done within 50ms...     ;; This initiates everything openCL wise just before it is needed by the UI for the first time
         (doto 
              ;(new JFrame "GridBagLayout Test" )   ;what is the difference between these?
              (proxy [JFrame] ["OpenCL  Multiply-with-carry Random number explorer"])
