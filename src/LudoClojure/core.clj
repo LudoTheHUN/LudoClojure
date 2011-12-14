@@ -52,7 +52,7 @@
 (defn -main [& args]
   (println "Please run with options:
            1: Random number generator with data sourced from openCL
-		   2: Funk renderer, leading to neuron readout scaner...")
+           2: Funk renderer, leading to neuron readout scaner...")
   (println (hello args))
   (when (=  (str (first args)) "1") (do 
                                     (println "option1 selcted")
@@ -60,26 +60,31 @@
                                     ))
   (when (=  (str (first args)) "2") (do 
                                     (println "option2 selcted")
-                                    (UI2/frame)
-                                    ))
+                                    (UI2/frame)))
   (when (= (str(first args)) nil) (do 
-                        (println "no options")
-                        
-                        ))
-)
+                                    (println "no options"))))
+
 
 (println "hello there from core.clj file")
 
 ;(use 'LudoClojure.randomnumberexplorer.randomnumerexplorer)
 
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;; Iteration loops32
+;;;;; Iteration loops33
+;TODO : Super clean refactor
+
+
 ;TODO close over the opencl code... or rather send it off onto another thread.?
 ;Note innner loop within openCL context can not be quit without loose hooks to openCL buffers??
 ;Can we onload and offload within this loop when it is setoff on another thread?
 ;To get the image to refresh , just need to close over (closure style) openCL code , passing in the veriables?? But longer term, the opencl should be on a separate thread, in ... have a listener ...look into sendof?
+
+
 
 ;TODO animate over growing moding values for random number geerator..., do it with slider...
 ;TODO Add a user interface, slider?, for the moding value.

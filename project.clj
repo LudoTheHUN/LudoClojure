@@ -9,5 +9,5 @@
         [lein-eclipse "1.0.0"]
 	]
                  ;;Note: when creating an UberJar including calx + gloss cause error "Exception in thread "main" java.lang.SecurityException: Invalid signature file digest for Manifest main attributes, need to remove manualy both non manifest files"
-  :jvm-opts ["-Xmx1300m"]
+  :jvm-opts ["-Xmx5300m"]
   :main LudoClojure.core )
