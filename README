@@ -30,11 +30,11 @@ You can use WinRar to do this...
 
 To Develop:
 Option A) Use any text editor... Notepad++ was used upto mid dec2011.
-Option B) Use eclipse. dev-dependencies added so:
+Option B) Use eclipse. dev-dependencies added so: get eclipse, I used: eclipse-java-indigo-SR1-win32-x86_64
            1) git clone
            2) run: lein deps
            3) run: lein eclipse
-           4) instal 'counterclockwise' in eclipse
+           4) instal 'counterclockwise' in eclipse  (probably ok to fast forward to here)
            5) point eclipse to the project.
 
 
@@ -45,7 +45,7 @@ Findings:
 
 ## BIG TODOs:
 Tool up!
-  Consider Eclipse with clojure plugin.   ...urgh, just try it, however good notepad++ is.
+  DONE: Consider Eclipse with clojure plugin.   ...urgh, just try it, however good notepad++ is.
   Have a look at Casandra?
   Have a look at Storm https://github.com/nathanmarz/storm/wiki/Clojure-DSL
 Wrap openCL functionality further.
