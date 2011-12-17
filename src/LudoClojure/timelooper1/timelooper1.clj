@@ -149,7 +149,7 @@ __kernel void randomnumbergen(
         }
         
         //Any writing out of bounds of an array corrupts memory further afield!!!
-        // Note: ANY writing to the same location causes a catastrophic result fail
+        // Note: ANY writing to the same location causes a catastrophic result fail, aka race condition
         
         
         //kernelrandmoderoutput is the second slider...
@@ -209,6 +209,7 @@ foo   ;this is the root binding
    
 (printfoo)
 (printfoo "boo")
+(defn addfoo [x y] (+ x y))
 
 (binding [foo 3] ;;binding macro , changes the value of foo within the scope of the binding only and within the thread from which binding is calledS, foo has not changed
   (printfoo))
