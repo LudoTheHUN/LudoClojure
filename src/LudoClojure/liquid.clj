@@ -21,6 +21,7 @@ __kernel void flopliquid(
     __global float *liquidState1_b,
     __global float *liquidState2_a,     
     __global float *liquidState2_b,
+    __global int *debug_infobuff,
     const int connections
         )   
 {
@@ -49,7 +50,7 @@ __kernel void flopliquid(
 
         //Note: literature states that the neuron is inhibitory or exitory, not the synapse, so this model is wrong, would instead have to load in a ranom +-1 arrey (idealy persist it beteween runs)
 
-        if (inhibition_chooser >= 11) {
+        if (inhibition_chooser >= 28) {
           liquidState2 = liquidState2 + (liquidState1_a[gid_to_read] * 0.212);    //action potential getting subtracted or added based on spiking state of connected neurons
           }
         else  {
@@ -74,28 +75,35 @@ __kernel void flopliquid(
     if (liquidState1 < 0.1  && liquidState2 > 1.0 ) {   //The neuron went over the action potential limit and has not just fired (absolute refractory requirement), hence it will now fire 
       liquidState1_b[gid] = 1.0;                        // Nuron is firing spike strength goes to 1
       liquidState2_b[gid] = -0.2;                       // Nuron is firing, the potential goes into 'relative refractory period' where it is more unlikely to fire, neuron will recover from negative activation potential back to zero on it's now.
+      debug_infobuff[gid] = 1;
       }
      // adding logic to preven writes back to global memory if the neuron has finished firing and/or it's activation potential is stable at zero (hence nothig to update)
     else if (liquidState1 == 0.0 && liquidState2_orig == 0.0 && liquidState2 == 0.0)  { //Neuron is sleeping, and no new potential delta arrived this tick, neuron has nothing to do.
       //Do nothing, save yourselft a write to global GPU ram
+      debug_infobuff[gid] = 2;
       }
     else if (liquidState1 < 0.01 && liquidState2_orig == 0.0 && liquidState2 == 0.0)  { //Neuron is at rest, and no new potential delta arrived this tick, put neuron to sleep.
       liquidState1_b[gid] = 0.0;
+      debug_infobuff[gid] = 3;
       }
     else if (liquidState1 == 0.0 && liquidState2 <= -0.025)  {                       //Action potential was depressed below zero, it will thus be held at zero (OLD NOTE: could use this to detece a neuron that will never fire as it's constantly in hibited, could use this as a triger to reconfigure..... 
       // liquidState1_b[gid] = liquidState1 * 0.5; No need to do this write
       liquidState2_b[gid] = liquidState2 + 0.025;
+      debug_infobuff[gid] = 4;
       }
     else if (liquidState1 == 0.0 && liquidState2 > -0.025 && liquidState2 < 0.01)  {                       //Action potential was depressed below zero, it will thus be held at zero (could use this detece a neuron that will never fire as it's constantly in hibited, could use this as a triger to reconfigure..... 
       liquidState2_b[gid] = 0.0;   //Putting the potential to sleep mode at zero.
+      debug_infobuff[gid] = 5;
       }
    else if (liquidState2 < -0.025)  {                       //Action potential was depressed below zero, it will thus be held at zero (could use this detece a neuron that will never fire as it's constantly in hibited, could use this as a triger to reconfigure..... 
       liquidState1_b[gid] = liquidState1 * 0.5;
       liquidState2_b[gid] = liquidState2 + 0.025;
+      debug_infobuff[gid] = 6;
       }
     else  {
       liquidState1_b[gid] = liquidState1 * 0.5;   //Neuron not firing, it's spike strength decays quickly
-      liquidState2_b[gid] = liquidState2 * 0.99;  //Neuron not firing, it's activation potential slowly decays (but 'remembers' recent activity via the potential
+      liquidState2_b[gid] = liquidState2 * 0.74;  //Neuron not firing, it's activation potential slowly decays (but 'remembers' recent activity via the potential
+      debug_infobuff[gid] = 7;
       }
 
     //liquidState1_b[gid] = (1.0 / (1.0 + exp( -1.0 * liquidState1))) +0.002;
@@ -126,14 +134,15 @@ __kernel void flopliquid(
 ;;(float-array 16 '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16))
 ;(for [i (range (* 16))] (float (rand)))
 
-(def random_liquid_seed (doall (for [i (range (* globalsize))] (float (rand)))))
+(def random_liquid_seed (doall (for [i (range (* globalsize))] (float (* 0.3 (rand))))))
 ;(count random_liquid_seed)
 
 (def init_liquid_status (atom true))
 (defn init_liquid! [globalsize]
   "Initialises the liquid states"
     (def conectivity     (create-buffer globalsize :int32))    ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected 
-;    (def liquidState1_a  (create-buffer globalsize :float32))  ;Spike activation buffer A of the state double buffer
+    (def debug_infobuff  (create-buffer globalsize :int32))    ;Vector used for debug information to emit out of the liquid
+    ;    (def liquidState1_a  (create-buffer globalsize :float32))  ;Spike activation buffer A of the state double buffer
     (def liquidState1_a  (wrap random_liquid_seed :float32))
     (def liquidState1_b  (create-buffer globalsize :float32))  ;Spike activation buffer B of the state double buffer
     (def liquidState2_a  (create-buffer globalsize :float32))  ;Activation potential buffer A of the state double buffer
@@ -143,8 +152,8 @@ __kernel void flopliquid(
 
 
 (def flop_liquid_status (atom true))
-(defn flop_liquid! [globalsize connections liquidState1_A liquidState1_B liquidState2_A liquidState2_B]
-    (enqueue-kernel :flopliquid globalsize conectivity liquidState1_A liquidState1_B liquidState2_A liquidState2_B connections)
+(defn flop_liquid! [globalsize connections liquidState1_A liquidState1_B liquidState2_A liquidState2_B debug_infobuff]
+    (enqueue-kernel :flopliquid globalsize conectivity liquidState1_A liquidState1_B liquidState2_A liquidState2_B debug_infobuff connections)
              ;(println "done enqueue kernel3, global size is: " globalsize " conectivity is:" connections)
     (enqueue-barrier)
     (finish)
@@ -165,18 +174,29 @@ __kernel void flopliquid(
     (let [liquid_data (^floats float-array (deref (enqueue-read whichliquidbuffer [0 20000])))]
      (println 
                      (map  (fn [x] 
-                     ;;; ;(floatround 0 (nth liquid_data x))
-                      (if (>= (nth liquid_data x) 0.04) 1 0)
-                      )(range 0 64))  
+                       ;(floatround 1 (nth liquid_data x))
+                      (if (>= (nth liquid_data x) 0.1) 1 0)
+                      )(range 0 64))
               "total on:" (reduce + 0 (map (fn [x] 
                       ;(floatround 0 (nth liquid_data x))
-                      (if (>= (nth liquid_data x) 0.04) 1 0)
+                      (if (>= (nth liquid_data x) 0.1) 1 0)
                       )(range 0 20000))   )
     ))
     ;(swap! readout_liquid_status (fn [_] false))
     ;(swap! readout_liquid_status (fn [_] true))
 )
 
+(def readout_liquid_ints_status (atom true))
+(defn readout_liquid_ints! [whichliquidbuffer]
+    (let [liquid_data (^ints int-array (deref (enqueue-read whichliquidbuffer [0 20000])))]
+     (println 
+                     (map  (fn [x] 
+                      (nth liquid_data x)
+                      )(range 0 64))
+    ))
+    ;(swap! readout_liquid_status (fn [_] false))
+    ;(swap! readout_liquid_status (fn [_] true))
+)
 
 (defn run_liquid! [globalsize connections OpenCLSourceToUse]
   (with-cl
@@ -186,10 +206,11 @@ __kernel void flopliquid(
       (with-program (compile-program OpenCLSourceToUse)
         (loop [k opencl_loops]
           (if @readout_liquid_status (readout_liquid! liquidState1_a))
-          (if @flop_liquid_status (flop_liquid! globalsize connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b))
-          ;(if @readout_liquid_status (readout_liquid! liquidState1_b))
-          (if @flop_liquid_status (flop_liquid! globalsize connections liquidState1_b liquidState1_a liquidState2_b liquidState2_a))
-          
+          (if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
+          (if @flop_liquid_status (flop_liquid! globalsize connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b debug_infobuff))
+          (if @readout_liquid_status (readout_liquid! liquidState1_b))
+          (if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
+          (if @flop_liquid_status (flop_liquid! globalsize connections liquidState1_b liquidState1_a liquidState2_b liquidState2_a debug_infobuff))
         (Thread/sleep 0)
         (if (= k 1) nil (recur (dec k))))
         )
@@ -205,7 +226,7 @@ __kernel void flopliquid(
 )
 
 (def globalsize (* 64 64 64))  ;Total size of liquid
-(def connections 5)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
+(def connections 40)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
 (def opencl_loops 50)
 
 ;       (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
