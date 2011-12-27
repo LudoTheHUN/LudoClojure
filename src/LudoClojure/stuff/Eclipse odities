@@ -1,0 +1,58 @@
+;;; Eclipse/counterclockwise hides from the UI (some) output if it has very many elements.....
+
+
+(count (range 50000))
+(quote
+(def random_conectivity_seed
+  (doall
+    (let [r (java.util.Random. 12345)]
+      (doall (for 
+        [i (range (* globalsize))] 
+        (.nextInt r globalsize))))))
+
+(def globalsize 100)
+(def random_conectivity_seedX 
+   (let [r (java.util.Random. 12345)]
+     (loop [i 0 outarray []]
+       (if (= i globalsize)
+         outarray
+         (recur (inc i) (conj outarray (.nextInt r globalsize) ))))))
+(conj (conj [] 323) 234)
+(count random_conectivity_seedX)
+
+(loop [i 0]
+      (if (= i atomscount)
+          (println "doneupdate")
+          (do (let [x (nth atomkeys i)]
+                   (swap! (x aMapOfAtoms)
+                     (fn [Neuron] (conj Neuron {:firestate (updatefirestate aMapOfAtoms x)}))))
+            (recur (inc i)))))
+
+globalsize
+  
+(defn random_conectivity_seed [globalsizeZ]
+  "Returns an array of global size of ints based on a seed, values are reproducable between instances of the application"
+   (let [r (java.util.Random. 12345)]
+     (doall (reduce (fn [coll item]
+                (conj coll (.nextInt r globalsizeZ)   ))
+             []
+             (range globalsizeZ)))))
+(def fooo
+(random_conectivity_seed 50000))
+(def r (java.util.Random. 12345))
+(.nextInt r globalsize)
+(type (range 50000))   ;;Note tis breaks somewhere between 5000 and 50000.... so need:
+
+
+     !!!!FFFFFFFSSSS
+     (reduce (fn [x] (conj x (.nextInt r 10))) [] (range 1000))
+(reduce (fn [x] (conj [] 5)) [] (range 1000))
+     (for [i (range (* 10000))] (conj conectivity_array ))
+
+     
+(reduce (fn [x] (conj x 46)) (range 1000))
+
+(reduce (fn [coll item]
+           (conj coll {item item}))
+ [] (range 10))
+)

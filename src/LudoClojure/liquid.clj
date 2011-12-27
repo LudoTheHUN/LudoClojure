@@ -107,7 +107,7 @@ __kernel void flopliquid(
       }
 
     //liquidState1_b[gid] = (1.0 / (1.0 + exp( -1.0 * liquidState1))) +0.002;
-    
+    debug_infobuff[gid]= random_value;
 }
   ")
 
@@ -134,19 +134,38 @@ __kernel void flopliquid(
 ;;(float-array 16 '(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16))
 ;(for [i (range (* 16))] (float (rand)))
 
-(def random_liquid_seed (doall (for [i (range (* globalsize))] (float (* 0.3 (rand))))))
+;depricated: (def random_liquid_seed (doall (for [i (range (* globalsize))] (float (* 0.3 (rand))))))
+(defn random_liquid_seedZ [globalsizeZ] (doall (for [i (range (* globalsizeZ))] (float (* 0.3 (rand))))))
 ;(count random_liquid_seed)
 
+(defn random_conectivity_seedZ [globalsizeZ]
+   (doall
+   (let [r (java.util.Random. 12345)]
+     (loop [i 0 outarray []]
+       (if (= i globalsizeZ)
+         outarray
+         (recur (inc i) (conj outarray (.nextInt r 64000) )))))))
+;(def foo (random_conectivity_seedZ (* 64 64 64 64)))
+;(count foo)
+
 (def init_liquid_status (atom true))
-(defn init_liquid! [globalsize]
+(defn init_liquid! [globalsizeZ]
   "Initialises the liquid states"
-    (def conectivity     (create-buffer globalsize :int32))    ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected 
-    (def debug_infobuff  (create-buffer globalsize :int32))    ;Vector used for debug information to emit out of the liquid
+
+    ;(def conectivity     (create-buffer globalsize :int32))    ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected 
+    (def conectivity     (wrap (random_conectivity_seedZ globalsizeZ) :int32))    ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected
+    (enqueue-barrier)(finish)
+    (def debug_infobuff  (create-buffer globalsizeZ :int32))    ;Vector used for debug information to emit out of the liquid
+    (enqueue-barrier)(finish)
     ;    (def liquidState1_a  (create-buffer globalsize :float32))  ;Spike activation buffer A of the state double buffer
-    (def liquidState1_a  (wrap random_liquid_seed :float32))
-    (def liquidState1_b  (create-buffer globalsize :float32))  ;Spike activation buffer B of the state double buffer
-    (def liquidState2_a  (create-buffer globalsize :float32))  ;Activation potential buffer A of the state double buffer
-    (def liquidState2_b  (create-buffer globalsize :float32))  ;Activation potential buffer B of the state double buffer
+    (def liquidState1_a  (wrap (random_liquid_seedZ globalsizeZ)  :float32))
+    (enqueue-barrier)(finish)
+    (def liquidState1_b  (create-buffer globalsizeZ :float32))  ;Spike activation buffer B of the state double buffer
+    (enqueue-barrier)(finish)
+    (def liquidState2_a  (create-buffer globalsizeZ :float32))  ;Activation potential buffer A of the state double buffer
+    (enqueue-barrier)(finish)
+    (def liquidState2_b  (create-buffer globalsizeZ :float32))  ;Activation potential buffer B of the state double buffer
+    (enqueue-barrier)(finish)
     ;(swap! init_liquid_status (fn [_] false))
     )
 
@@ -171,7 +190,8 @@ __kernel void flopliquid(
 
 (def readout_liquid_status (atom true))
 (defn readout_liquid! [whichliquidbuffer]
-    (let [liquid_data (^floats float-array (deref (enqueue-read whichliquidbuffer [0 20000])))]
+    (let [liquid_data (^floats float-array (deref (enqueue-read whichliquidbuffer [0 4096])))]
+     (enqueue-barrier)(finish)
      (println 
                      (map  (fn [x] 
                        ;(floatround 1 (nth liquid_data x))
@@ -180,37 +200,43 @@ __kernel void flopliquid(
               "total on:" (reduce + 0 (map (fn [x] 
                       ;(floatround 0 (nth liquid_data x))
                       (if (>= (nth liquid_data x) 0.1) 1 0)
-                      )(range 0 20000))   )
+                      )(range 0 4096))   )
     ))
+    (enqueue-barrier)(finish)
     ;(swap! readout_liquid_status (fn [_] false))
     ;(swap! readout_liquid_status (fn [_] true))
 )
 
 (def readout_liquid_ints_status (atom true))
 (defn readout_liquid_ints! [whichliquidbuffer]
-    (let [liquid_data (^ints int-array (deref (enqueue-read whichliquidbuffer [0 20000])))]
+    (let [liquid_data (^ints int-array (deref (enqueue-read whichliquidbuffer [0 4096])))]
+     (enqueue-barrier)(finish)
      (println 
                      (map  (fn [x] 
                       (nth liquid_data x)
                       )(range 0 64))
     ))
+    (enqueue-barrier)(finish)
     ;(swap! readout_liquid_status (fn [_] false))
     ;(swap! readout_liquid_status (fn [_] true))
 )
 
-(defn run_liquid! [globalsize connections OpenCLSourceToUse]
+
+(defn run_liquid! [globalsizeZ connections OpenCLSourceToUse]
   (with-cl
-   (if @init_liquid_status (init_liquid! globalsize))
+   (if @init_liquid_status (init_liquid! globalsizeZ))  (enqueue-barrier)(finish)
      (def checkpoint1_start (. System (nanoTime)))
       ;Main with-cl loop starts here
       (with-program (compile-program OpenCLSourceToUse)
         (loop [k opencl_loops]
-          (if @readout_liquid_status (readout_liquid! liquidState1_a))
+          ;; For some rason, only when size of array is above (* 64 64 64), the next lines is causing an InvalidCommandQueue error...
+          ;;(if @readout_liquid_status (readout_liquid! liquidState1_a))
           (if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
-          (if @flop_liquid_status (flop_liquid! globalsize connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b debug_infobuff))
+          (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b debug_infobuff))
+
           (if @readout_liquid_status (readout_liquid! liquidState1_b))
           (if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
-          (if @flop_liquid_status (flop_liquid! globalsize connections liquidState1_b liquidState1_a liquidState2_b liquidState2_a debug_infobuff))
+          (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_b liquidState1_a liquidState2_b liquidState2_a debug_infobuff))
         (Thread/sleep 0)
         (if (= k 1) nil (recur (dec k))))
         )
@@ -226,8 +252,8 @@ __kernel void flopliquid(
 )
 
 (def globalsize (* 64 64 64))  ;Total size of liquid
-(def connections 40)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
-(def opencl_loops 50)
+(def connections 10)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
+(def opencl_loops 100)
 
 ;       (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
 
