@@ -46,8 +46,8 @@ Findings:
 ## BIG TODOs:
 Tool up!
   DONE: Consider Eclipse with clojure plugin.   ...urgh, just try it, however good notepad++ is.
-  Have a look at Casandra?
-  Have a look at Storm https://github.com/nathanmarz/storm/wiki/Clojure-DSL
+  NA: Have a look at Casandra?
+  NA: Have a look at Storm https://github.com/nathanmarz/storm/wiki/Clojure-DSL
 Wrap openCL functionality further.
   DSL for openCL transformations over neurons, think openCL kernel writng + executing, wrapped, based on minimal defining statements.
   Wrap around the onloading, offloading of data into clojure (or java) datatypes into openCL

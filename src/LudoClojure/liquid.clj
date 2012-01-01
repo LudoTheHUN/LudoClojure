@@ -10,11 +10,24 @@
 (def globalsize (* 64 64 64))  ;Total size of liquid
 (def connections 5)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
 (def opencl_loops 50)
+
+
+
+(quote
+LSM TODOs
+Get modeled neurons more realistic
+Thing about output neuron
+implement p-delta rule 
+Set up a test case for resting
+)
+
 ;;Note
 ;;buffers 'a' are from t-1. buffers 'b' are t bufferrs (those that need to be computed now)
+
+
+
 (def sourceOpenCL
   "
-
 __kernel void flopliquid(
     __global int *conectivity,
     __global float *liquidState1_a,     
@@ -28,88 +41,62 @@ __kernel void flopliquid(
     int gid = get_global_id(0);
     int gsize = get_global_size(0);
 
-    int iatom = 0;
-    int random_value = 0;
-    int inhibition_chooser = 0;
-    int gid_to_read = 0;
-    float liquidState1 = liquidState1_a[gid] ;   //read in the spiking state of the current neuron at t-1
-    float liquidState2 = liquidState2_a[gid] ;   //read in the synaptic potential from the t-1 buffer
-    float liquidState1_orig = liquidState1;       //taking stock of the spike strength before we start changing it       (looking to optimise away unnecessary writes)
-    float liquidState2_orig = liquidState2;      //taking stock of the activation potential before we start changing it (looking to optimise away unnecessary writes)
-    //__local float mylocalBuffer[1024];  // could create a local buffer so that the write are coelesed __local float localBuffer[1024];  as per here http://stackoverflow.com/questions/2541929/how-do-i-use-local-memory-in-opencl
+    int iatom = 0;                               //This is used to loop over all synapses in the neuron is connected to
+    int random_value = 0;                        //This will be random value that will be used to procedurally create the synapse characterystics
+    int inhibition_chooser = 0;                  //This will use the random value to also decide if this connection in inhibitory or exitory, note that coupling with position may lead to a non symetric system.
+    int gid_to_read = 0;                         //This will the neuron to read from for this synapse, needs work to make it local.
+    float liquidState1 = liquidState1_a[gid] ;   //Read in the Action Potential (aka: spike strength) of the current neuron at t-1.
+    float liquidState2 = liquidState2_a[gid] ;   //Read in the Activation Potential (aka: least action potential needed start a spike) from the t-1 buffer.
+    float liquidState1_orig = liquidState1;      //Taking stock of the Action Potential before we start changing it       (looking to optimise away unnecessary writes later if we have no change.)
+    float liquidState2_orig = liquidState2;      //Taking stock of the Activation Potential before we start changing it (looking to optimise away unnecessary writes)
+    //__local float mylocalBuffer[1024];         //Future optimisation: could create a local buffer so that the write are coelesed __local float localBuffer[1024];  as per here http://stackoverflow.com/questions/2541929/how-do-i-use-local-memory-in-opencl
 
-    uint m_z = conectivity[gid];  //Randomnumber generator step: random number initial seed, this is needed per each kernel execution so that random number created are all different, else each kernel would produce same set of randoms, also allows for conectivity mutations
-    uint m_w = gid;               //Randomnumber generator step: secondary seed
+    uint m_z = conectivity[gid];                 //Randomnumber generator step: random number initial seed, this is needed per each kernel execution so that random number created are all different, else each kernel would produce same set of randoms, also allows for conectivity mutations (future research area), clojure creates this random number deterministically so executions are reproducable.
+    uint m_w = 1;                                //Randomnumber generator step: Note, can not be gid because random number generator needs non zero initial values
 
+
+
+if (liquidState1 > liquidState2) {               //If we have a spike, then.... very little to do...
+
+liquidState1_b[gid] = 10.0;                      //Action Potential getting set to the spike level
+liquidState2_b[gid] = 100.0;                     //Activation Potential getting set to the spike level, making another spike very unlikely untill it decays off
+
+}
+else  {
     for(iatom = 0; iatom < connections; iatom+=1 ) {
-        m_z = 36969 * (m_z & 65535) + (m_z >> 16);    //Randomnumber generator step
-        m_w = 18000 * (m_w & 65535) + (m_w >> 16);    //Randomnumber generator step
-        random_value = ((m_z << 16) + m_w);           //Randomnumber generator step:The large rundom number
-        inhibition_chooser = random_value % 100;      //Randomnumber generator step:Random number to determine inhibitory vs exitory connection
-        gid_to_read = random_value % gsize;           //Randomnumber generator step which nuron to read from     TODO add locality via xyz space here... Note this is the only place that needs it?
+        m_z = 36969 * (m_z & 65535) + (m_z >> 16);    //Randomnumber generator step: As per http://en.wikipedia.org/wiki/Random_number_generation
+        m_w = 18000 * (m_w & 65535) + (m_w >> 16);    //Randomnumber generator step:
+        random_value = ((m_z << 16) + m_w);           //Randomnumber generator step: The large 32bit random number generated by the process for this synapse.
+        inhibition_chooser = random_value % 100;      //Randomnumber generator step: Random number to determine inhibitory vs exitory connection
+        gid_to_read = random_value % gsize;           //Randomnumber generator step: which nuron to read from     TODO: add locality via xyz space here... Note this is the only place that needs to know the liquid conectivity topology, can also be created procedurally.
 
-        //Note: literature states that the neuron is inhibitory or exitory, not the synapse, so this model is wrong, would instead have to load in a ranom +-1 arrey (idealy persist it beteween runs)
+        //Note: LSM literature states that the neuron is inhibitory or exitory, not the synapse, so this model is wrong, would instead have to load in a random +1,-1 int arrey with correct distribution, or use signage of an existing vlaue, eg: liquidState1, assuming signage can never change during normal functioning  (idealy create procedurally to be able to replicate exactly.)
 
-        if (inhibition_chooser >= 28) {
-          liquidState2 = liquidState2 + (liquidState1_a[gid_to_read] * 0.212);    //action potential getting subtracted or added based on spiking state of connected neurons
+//Major refactor 2012
+
+        if (inhibition_chooser >= 20) {
+          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.4);    //action potential getting subtracted or added based on Action Potential of connected neurons
           }
         else  {
-                if (liquidState2 < -1.0) {
-                //Do nothing,  potential is as depressed as it can get, save yourself a global GPU RAM read
-                }
-                else  {
-                liquidState2 = liquidState2 - (liquidState1_a[gid_to_read] * 0.0005);   //action potential getting subtracted or added based on spiking state of connected neurons
-                }
-               }
-        }
-        //TODO add neuron activation potential 
+          liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.25);    //action potential getting subtracted or added based on Action Potential of connected neurons
+          }
+         }   // Closes the for loop over iatom , aka synapses
+
+     // TODO: Speed optimisations possible here by preventing writes when values are not changing, (when just at the asimptotes).
+
+     liquidState1_b[gid] = liquidState1 * 0.5;                                  // Writing out the Action Potential , which is reduced by the decay rate    TODO: could make this a parameter
+     liquidState2_b[gid] = ((liquidState2 - 1.0) * 0.6 ) + 1.0;                 // Writing out the Activation Potential, Decaying it by 0.6, asymptoting it to 1.0.   TODO: long term other slower neuron dynamics can be added here by making the decay rate and assimptote represent neuronal adaptations to its typical activation rates.
+                                                                                //TODO: Maas made the decay rates different if the neuron was exitory vs inhibitory, that's for another refactor...
+
+}  //Closing the non spike firing else
+
         // Any writing out of bounds of an array corrupts memory further afield!!!
         // Note: ANY writing to the same location causes a catastrophic result fail, aka race condition
 
+debug_infobuff[gid]= random_value;
 
-// Note
-// liquidState1  - spike strength
-// liquidState2  - activation potential
-//Idea: for debug/speed optimisation, we could see which case gets hit the most often, and put loop in that order
-
-    if (liquidState1 < 0.1  && liquidState2 > 1.0 ) {   //The neuron went over the action potential limit and has not just fired (absolute refractory requirement), hence it will now fire 
-      liquidState1_b[gid] = 1.0;                        // Nuron is firing spike strength goes to 1
-      liquidState2_b[gid] = -0.2;                       // Nuron is firing, the potential goes into 'relative refractory period' where it is more unlikely to fire, neuron will recover from negative activation potential back to zero on it's now.
-      debug_infobuff[gid] = 1;
-      }
-     // adding logic to preven writes back to global memory if the neuron has finished firing and/or it's activation potential is stable at zero (hence nothig to update)
-    else if (liquidState1 == 0.0 && liquidState2_orig == 0.0 && liquidState2 == 0.0)  { //Neuron is sleeping, and no new potential delta arrived this tick, neuron has nothing to do.
-      //Do nothing, save yourselft a write to global GPU ram
-      debug_infobuff[gid] = 2;
-      }
-    else if (liquidState1 < 0.01 && liquidState2_orig == 0.0 && liquidState2 == 0.0)  { //Neuron is at rest, and no new potential delta arrived this tick, put neuron to sleep.
-      liquidState1_b[gid] = 0.0;
-      debug_infobuff[gid] = 3;
-      }
-    else if (liquidState1 == 0.0 && liquidState2 <= -0.025)  {                       //Action potential was depressed below zero, it will thus be held at zero (OLD NOTE: could use this to detece a neuron that will never fire as it's constantly in hibited, could use this as a triger to reconfigure..... 
-      // liquidState1_b[gid] = liquidState1 * 0.5; No need to do this write
-      liquidState2_b[gid] = liquidState2 + 0.025;
-      debug_infobuff[gid] = 4;
-      }
-    else if (liquidState1 == 0.0 && liquidState2 > -0.025 && liquidState2 < 0.01)  {                       //Action potential was depressed below zero, it will thus be held at zero (could use this detece a neuron that will never fire as it's constantly in hibited, could use this as a triger to reconfigure..... 
-      liquidState2_b[gid] = 0.0;   //Putting the potential to sleep mode at zero.
-      debug_infobuff[gid] = 5;
-      }
-   else if (liquidState2 < -0.025)  {                       //Action potential was depressed below zero, it will thus be held at zero (could use this detece a neuron that will never fire as it's constantly in hibited, could use this as a triger to reconfigure..... 
-      liquidState1_b[gid] = liquidState1 * 0.5;
-      liquidState2_b[gid] = liquidState2 + 0.025;
-      debug_infobuff[gid] = 6;
-      }
-    else  {
-      liquidState1_b[gid] = liquidState1 * 0.5;   //Neuron not firing, it's spike strength decays quickly
-      liquidState2_b[gid] = liquidState2 * 0.74;  //Neuron not firing, it's activation potential slowly decays (but 'remembers' recent activity via the potential
-      debug_infobuff[gid] = 7;
-      }
-
-    //liquidState1_b[gid] = (1.0 / (1.0 + exp( -1.0 * liquidState1))) +0.002;
-    debug_infobuff[gid]= random_value;
 }
-  ")
+")
 
 
 ;      (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
@@ -135,8 +122,18 @@ __kernel void flopliquid(
 ;(for [i (range (* 16))] (float (rand)))
 
 ;depricated: (def random_liquid_seed (doall (for [i (range (* globalsize))] (float (* 0.3 (rand))))))
-(defn random_liquid_seedZ [globalsizeZ] (doall (for [i (range (* globalsizeZ))] (float (* 0.3 (rand))))))
-;(count random_liquid_seed)
+;(defn random_liquid_seedZ [globalsizeZ] (doall (for [i (range (* globalsizeZ))] (float (* 0.3 (rand))))))
+;(time(count (random_liquid_seedZ 10000000)))
+;;Note, we want reproducable liquids, so lets make this a deterministic seed...
+(defn random_liquid_seedZ [globalsizeZ]
+   (doall
+   (let [r (java.util.Random. 12345)]
+     (loop [i 0 outlist ()]
+       (if (= i globalsizeZ)
+         outlist
+         (recur (inc i) (conj outlist (* (.nextInt r 100) 0.0005))))))))
+;(round 0.0004  3)
+
 
 (defn random_conectivity_seedZ [globalsizeZ]
    (doall
@@ -145,25 +142,20 @@ __kernel void flopliquid(
        (if (= i globalsizeZ)
          outarray
          (recur (inc i) (conj outarray (.nextInt r 64000) )))))))
-;(def foo (random_conectivity_seedZ (* 64 64 64 64)))
+;(def foo (random_conectivity_seedZ (* 64)))
 ;(count foo)
+;(time (count (random_conectivity_seedZ (* 10000000))))
 
 (def init_liquid_status (atom true))
 (defn init_liquid! [globalsizeZ]
   "Initialises the liquid states"
-
     ;(def conectivity     (create-buffer globalsize :int32))    ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected 
-    (def conectivity     (wrap (random_conectivity_seedZ globalsizeZ) :int32))    ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected
-    (enqueue-barrier)(finish)
+    (def conectivity     (wrap (random_conectivity_seedZ globalsizeZ) :int32))     ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected
     (def debug_infobuff  (create-buffer globalsizeZ :int32))    ;Vector used for debug information to emit out of the liquid
-    (enqueue-barrier)(finish)
     ;    (def liquidState1_a  (create-buffer globalsize :float32))  ;Spike activation buffer A of the state double buffer
     (def liquidState1_a  (wrap (random_liquid_seedZ globalsizeZ)  :float32))
-    (enqueue-barrier)(finish)
     (def liquidState1_b  (create-buffer globalsizeZ :float32))  ;Spike activation buffer B of the state double buffer
-    (enqueue-barrier)(finish)
     (def liquidState2_a  (create-buffer globalsizeZ :float32))  ;Activation potential buffer A of the state double buffer
-    (enqueue-barrier)(finish)
     (def liquidState2_b  (create-buffer globalsizeZ :float32))  ;Activation potential buffer B of the state double buffer
     (enqueue-barrier)(finish)
     ;(swap! init_liquid_status (fn [_] false))
@@ -195,17 +187,20 @@ __kernel void flopliquid(
      (println 
                      (map  (fn [x] 
                        ;(floatround 1 (nth liquid_data x))
-                      (if (>= (nth liquid_data x) 0.1) 1 0)
+                      (if (>= (nth liquid_data x) 10.0) 1 0)
                       )(range 0 64))
               "total on:" (reduce + 0 (map (fn [x] 
                       ;(floatround 0 (nth liquid_data x))
-                      (if (>= (nth liquid_data x) 0.1) 1 0)
+                      (if (>= (nth liquid_data x) 10.0) 1 0)
                       )(range 0 4096))   )
     ))
     (enqueue-barrier)(finish)
     ;(swap! readout_liquid_status (fn [_] false))
     ;(swap! readout_liquid_status (fn [_] true))
 )
+
+;    (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
+
 
 (def readout_liquid_ints_status (atom true))
 (defn readout_liquid_ints! [whichliquidbuffer]
@@ -231,11 +226,13 @@ __kernel void flopliquid(
         (loop [k opencl_loops]
           ;; For some rason, only when size of array is above (* 64 64 64), the next lines is causing an InvalidCommandQueue error...
           ;;(if @readout_liquid_status (readout_liquid! liquidState1_a))
-          (if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
+          ;(if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
           (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b debug_infobuff))
 
-          (if @readout_liquid_status (readout_liquid! liquidState1_b))
-          (if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
+   ;comment this back in...       ;
+          (if @readout_liquid_status (readout_liquid! liquidState1_a))
+          ;;(if @readout_liquid_status (readout_liquid! liquidState2_a))
+          ;(if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
           (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_b liquidState1_a liquidState2_b liquidState2_a debug_infobuff))
         (Thread/sleep 0)
         (if (= k 1) nil (recur (dec k))))
@@ -252,7 +249,7 @@ __kernel void flopliquid(
 )
 
 (def globalsize (* 64 64 64))  ;Total size of liquid
-(def connections 10)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
+(def connections 5)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
 (def opencl_loops 100)
 
 ;       (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
@@ -265,7 +262,7 @@ __kernel void flopliquid(
  ;     (total operations                       ) (total seconds                                        )  billion   )
 
 
-(println "got to checkpoint 1")
+(println "All Looks OK code wise...")
 
 ;run this:
 ;;TODO, be able to 'run' things within a threaded with-cl (that's in a loop), by running a function....
