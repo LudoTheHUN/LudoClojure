@@ -15,16 +15,22 @@
 
 (quote
 LSM TODOs
-Get modeled neurons more realistic
-Thing about output neuron
-implement p-delta rule 
-Set up a test case for resting
+
+DONE Get modeled neurons more realistic as per calc model
+DONE : Note, this could take forever, need tools to manage this... Tune parameters to somethig realistic, spike should me much more then typical potential
+Look at storm, we need to create many liquids on the fly, just by passing a name of this liquid, create a DSL for creating them... what would be an idomatic way of doing this?
+
+
+Thing about output neurons, pdelta rule, parallel perceptrons, their GPU implementation....Need to create many on the fly.... DSL again?
+implement p-delta rule
+Set up a test case for testing, test data to inject... real vs procedurally created?
 )
 
 ;;Note
 ;;buffers 'a' are from t-1. buffers 'b' are t bufferrs (those that need to be computed now)
 
 
+;;   (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
 
 (def sourceOpenCL
   "
@@ -75,10 +81,10 @@ else  {
 //Major refactor 2012
 
         if (inhibition_chooser >= 20) {
-          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.4);    //action potential getting subtracted or added based on Action Potential of connected neurons
+          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.23);    //action potential getting subtracted or added based on Action Potential of connected neurons
           }
         else  {
-          liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.25);    //action potential getting subtracted or added based on Action Potential of connected neurons
+          liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.15);    //action potential getting subtracted or added based on Action Potential of connected neurons
           }
          }   // Closes the for loop over iatom , aka synapses
 
@@ -181,17 +187,19 @@ __kernel void flopliquid(
      (.setScale (bigdec n) s java.math.RoundingMode/HALF_EVEN))
 
 (def readout_liquid_status (atom true))
+
 (defn readout_liquid! [whichliquidbuffer]
     (let [liquid_data (^floats float-array (deref (enqueue-read whichliquidbuffer [0 4096])))]
      (enqueue-barrier)(finish)
      (println 
                      (map  (fn [x] 
                        ;(floatround 1 (nth liquid_data x))
-                      (if (>= (nth liquid_data x) 10.0) 1 0)
+                    ;  (if (>= (nth liquid_data x) 9.9) (nth liquid_data x) (nth liquid_data x))
+                       (if (>= (nth liquid_data x) 9.9) x 0)
                       )(range 0 64))
               "total on:" (reduce + 0 (map (fn [x] 
                       ;(floatround 0 (nth liquid_data x))
-                      (if (>= (nth liquid_data x) 10.0) 1 0)
+                      (if (>= (nth liquid_data x) 9.9) 1 0)
                       )(range 0 4096))   )
     ))
     (enqueue-barrier)(finish)
@@ -223,6 +231,7 @@ __kernel void flopliquid(
      (def checkpoint1_start (. System (nanoTime)))
       ;Main with-cl loop starts here
       (with-program (compile-program OpenCLSourceToUse)
+        
         (loop [k opencl_loops]
           ;; For some rason, only when size of array is above (* 64 64 64), the next lines is causing an InvalidCommandQueue error...
           ;;(if @readout_liquid_status (readout_liquid! liquidState1_a))
@@ -230,10 +239,12 @@ __kernel void flopliquid(
           (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b debug_infobuff))
 
    ;comment this back in...       ;
-          (if @readout_liquid_status (readout_liquid! liquidState1_a))
+          (if @readout_liquid_status (readout_liquid! liquidState1_b))
           ;;(if @readout_liquid_status (readout_liquid! liquidState2_a))
           ;(if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
           (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_b liquidState1_a liquidState2_b liquidState2_a debug_infobuff))
+          (if @readout_liquid_status (readout_liquid! liquidState1_a))
+          
         (Thread/sleep 0)
         (if (= k 1) nil (recur (dec k))))
         )
@@ -250,7 +261,7 @@ __kernel void flopliquid(
 
 (def globalsize (* 64 64 64))  ;Total size of liquid
 (def connections 5)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
-(def opencl_loops 100)
+(def opencl_loops 500)
 
 ;       (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
 
