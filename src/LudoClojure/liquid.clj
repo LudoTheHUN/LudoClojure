@@ -17,7 +17,7 @@
 LSM TODOs
 
 DONE Get modeled neurons more realistic as per calc model
-DONE : Note, this could take forever, need tools to manage this... Tune parameters to somethig realistic, spike should me much more then typical potential
+DONE Note, this could take forever, need tools to manage this... Tune parameters to somethig realistic, spike should me much more then typical potential
 Look at storm, we need to create many liquids on the fly, just by passing a name of this liquid, create a DSL for creating them... what would be an idomatic way of doing this?
 
 
@@ -81,7 +81,7 @@ else  {
 //Major refactor 2012
 
         if (inhibition_chooser >= 20) {
-          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.23);    //action potential getting subtracted or added based on Action Potential of connected neurons
+          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.25);    //action potential getting subtracted or added based on Action Potential of connected neurons
           }
         else  {
           liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.15);    //action potential getting subtracted or added based on Action Potential of connected neurons
@@ -131,15 +131,16 @@ __kernel void flopliquid(
 ;(defn random_liquid_seedZ [globalsizeZ] (doall (for [i (range (* globalsizeZ))] (float (* 0.3 (rand))))))
 ;(time(count (random_liquid_seedZ 10000000)))
 ;;Note, we want reproducable liquids, so lets make this a deterministic seed...
-(defn random_liquid_seedZ [globalsizeZ]
+
+(defn random_liquid_seedZ [globalsizeZ booster]
    (doall
    (let [r (java.util.Random. 12345)]
      (loop [i 0 outlist ()]
        (if (= i globalsizeZ)
          outlist
-         (recur (inc i) (conj outlist (* (.nextInt r 100) 0.0005))))))))
+         (recur (inc i) (conj outlist (+ (* (float (.nextInt r 100)) 0.1) booster) )))))))
 ;(round 0.0004  3)
-
+;(random_liquid_seedZ 14)
 
 (defn random_conectivity_seedZ [globalsizeZ]
    (doall
@@ -159,9 +160,9 @@ __kernel void flopliquid(
     (def conectivity     (wrap (random_conectivity_seedZ globalsizeZ) :int32))     ;A random used to influence the random number seed, so that a nuron can be rerolled if deemed poorly connected
     (def debug_infobuff  (create-buffer globalsizeZ :int32))    ;Vector used for debug information to emit out of the liquid
     ;    (def liquidState1_a  (create-buffer globalsize :float32))  ;Spike activation buffer A of the state double buffer
-    (def liquidState1_a  (wrap (random_liquid_seedZ globalsizeZ)  :float32))
+    (def liquidState1_a  (wrap (random_liquid_seedZ globalsizeZ 0.0)  :float32))
     (def liquidState1_b  (create-buffer globalsizeZ :float32))  ;Spike activation buffer B of the state double buffer
-    (def liquidState2_a  (create-buffer globalsizeZ :float32))  ;Activation potential buffer A of the state double buffer
+    (def liquidState2_a  (wrap (random_liquid_seedZ globalsizeZ 1.0) :float32)) ;Activation potential buffer A of the state double buffer
     (def liquidState2_b  (create-buffer globalsizeZ :float32))  ;Activation potential buffer B of the state double buffer
     (enqueue-barrier)(finish)
     ;(swap! init_liquid_status (fn [_] false))
@@ -192,6 +193,14 @@ __kernel void flopliquid(
     (let [liquid_data (^floats float-array (deref (enqueue-read whichliquidbuffer [0 4096])))]
      (enqueue-barrier)(finish)
      (println 
+       
+            ;         (map  (fn [x] 
+            ;           ;(floatround 1 (nth liquid_data x))
+            ;        ;  (if (>= (nth liquid_data x) 9.9) (nth liquid_data x) (nth liquid_data x))
+            ;           (nth liquid_data x)
+            ;          )(range 0 64))
+                     
+                     
                      (map  (fn [x] 
                        ;(floatround 1 (nth liquid_data x))
                     ;  (if (>= (nth liquid_data x) 9.9) (nth liquid_data x) (nth liquid_data x))
@@ -234,16 +243,16 @@ __kernel void flopliquid(
         
         (loop [k opencl_loops]
           ;; For some rason, only when size of array is above (* 64 64 64), the next lines is causing an InvalidCommandQueue error...
-          ;;(if @readout_liquid_status (readout_liquid! liquidState1_a))
+          (if @readout_liquid_status (readout_liquid! liquidState1_a))
           ;(if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
           (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b debug_infobuff))
 
-   ;comment this back in...       ;
-          (if @readout_liquid_status (readout_liquid! liquidState1_b))
+   ;comment this back in for more diagnostics   ;
+          ;(if @readout_liquid_status (readout_liquid! liquidState1_b))
           ;;(if @readout_liquid_status (readout_liquid! liquidState2_a))
           ;(if @readout_liquid_ints_status (readout_liquid_ints! debug_infobuff))
           (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_b liquidState1_a liquidState2_b liquidState2_a debug_infobuff))
-          (if @readout_liquid_status (readout_liquid! liquidState1_a))
+          (if @readout_liquid_status (readout_liquid! liquidState1_b))
           
         (Thread/sleep 0)
         (if (= k 1) nil (recur (dec k))))
@@ -260,9 +269,12 @@ __kernel void flopliquid(
 )
 
 (def globalsize (* 64 64 64))  ;Total size of liquid
-(def connections 5)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
-(def opencl_loops 500)
+(def connections 7)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
+(def opencl_loops 50)
 
+
+;   (swap! readout_liquid_status (fn [_] false))
+;   (swap! readout_liquid_status (fn [_] true))
 ;       (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
 
 
