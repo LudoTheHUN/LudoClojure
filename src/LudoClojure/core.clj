@@ -5,7 +5,7 @@
   (:require clojure.contrib.duck-streams )   ;needed for serde
   (:require clojure.contrib.seq-utils)       ;needed for serde
   ;(:require [LudoClojure.randomnumberexplorer.randomnumerexplorer :as UI1])
-  (:require [LudoClojure.timelooper1.timelooper1 :as UI2])
+  ;(:require [LudoClojure.timelooper1.timelooper1 :as UI2])
 
   (:gen-class))
   
@@ -60,7 +60,8 @@
                                     ))
   (when (=  (str (first args)) "2") (do 
                                     (println "option2 selcted")
-                                    (UI2/frame)))
+                                    ;(UI2/frame)
+									))
   (when (= (str(first args)) nil) (do 
                                     (println "no options"))))
 

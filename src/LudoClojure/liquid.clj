@@ -210,8 +210,9 @@ __kernel void flopliquid(
                       ;(floatround 0 (nth liquid_data x))
                       (if (>= (nth liquid_data x) 9.9) 1 0)
                       )(range 0 4096))   )
-    ))
-    (enqueue-barrier)(finish)
+    )
+     liquid_data
+     )
     ;(swap! readout_liquid_status (fn [_] false))
     ;(swap! readout_liquid_status (fn [_] true))
 )
@@ -236,10 +237,10 @@ __kernel void flopliquid(
 
 (defn run_liquid! [globalsizeZ connections OpenCLSourceToUse]
   (with-cl
-   (if @init_liquid_status (init_liquid! globalsizeZ))  (enqueue-barrier)(finish)
+     (if @init_liquid_status (init_liquid! globalsizeZ))  (enqueue-barrier)(finish)
      (def checkpoint1_start (. System (nanoTime)))
       ;Main with-cl loop starts here
-      (with-program (compile-program OpenCLSourceToUse)
+     (with-program (compile-program OpenCLSourceToUse)
         
         (loop [k opencl_loops]
           ;; For some rason, only when size of array is above (* 64 64 64), the next lines is causing an InvalidCommandQueue error...
@@ -258,6 +259,7 @@ __kernel void flopliquid(
         (if (= k 1) nil (recur (dec k))))
         )
       (def checkpoint1_end (. System (nanoTime)))
+      "Terminating liquid"
       ;Main with-cl loop ends here
     ;(println "to infinity, and beyond:" k)
    ))
