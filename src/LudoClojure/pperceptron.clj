@@ -52,21 +52,40 @@
 
 
 ;;TODO see if this rifle idiom will do it for me....
+;;This demonstrates an functional objectiviation over an atom, keeping its state. This is a closure (??) , but only if the atom is never exposed directly
 (defn make-counter [init-val] 
-    (let [c (atom init-val)] 
-      {:next #(swap! c inc)
-       :reset #(reset! c init-val)}))
-(def c (make-counter 10))
+    (let [foo (atom init-val)] 
+      {:next #(swap! foo inc)
+       :addcusom (fn [x] (swap! foo (fn [foo] (+ foo x))))
+       :reset #(reset! foo init-val)
+       :return_original_c @foo
+       :return_current_catom (fn [] foo)     ;This makes it a non closure (??) beucase the state inside is now accessible via the atom
+       ;  :return_current_catom2  #(foo)   ;;;fails, because #(x) macro expands to (fn [] (x)) not (fn [] x)
+       :return_current_catom3  (fn [] @foo)
+       }))
+(def c (make-counter 100))
 ((c :next))
+((c :addcusom) 20)
 ((c :next))
 ((c :reset))
+(c :returnval)
+(c :return_original_c)  ;; since foo within function definiton got derefed during defintion, this value will persists.
+@((c :return_current_catom))
+;  ((c :return_current_catom2))   ;;fails....  
+((c :return_current_catom3))
+
+((c :return_current_catom))
+(swap! ((c :return_current_catom)) inc)
+
 
 
 ;;rifle Idiom with forms I may want to use....
 (defn make-myfoo [init-options] 
     (let [c (atom "foo")] 
       {:next #(swap! c (fn [_] 456))
-       :reset #(reset! c init-options)}))
+       :reset #(reset! c init-options)
+       :returnval @c
+       }))
 (def f (make-myfoo 10))
 ((f :next))
 ((f :next))
@@ -109,14 +128,23 @@ __kernel void foopp(
                        ;(with-cl 
                        ;(with-program (compile-program sourceOpenCL2)
                                            #(enqueue-kernel :foopp    ;;basic kernel for testsing
-                                                ;(size_of_alphas_array app_config)     ;;get the global sizes
-                                                4
+                                                (size_of_alphas_array app_config)     ;;get the global sizes
                                                 (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
                                                 (:ps @pp))
                        
-                      ; ))                            ;;pp as second buffer to    TODO clean this up, this is just to see it work.....
+                      ; ))
+       :testflop_pp_fn
+                                           (fn [] (enqueue-kernel :foopp    ;;basic kernel for testsing
+                                                (size_of_alphas_array app_config)     ;;get the global sizes
+                                                (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
+                                                (:ps @pp)
+                                             ))
+
+                      ;;pp as second buffer to    TODO clean this up, this is just to see it work.....
                                          ;;TODO write the pp buffers here out of 'pp')
-       }
+       :return_pp_orig @pp
+       :return_pp_current @pp
+                      }
        )
      ;;TODO!!! instead of returning the pp itself, define the functions typically done within  with-cl, run program....
     ;(enqueue-kernel :flopliquid globalsize conectivity liquidState1_A liquidState1_B liquidState2_A liquidState2_B debug_infobuff connections)
@@ -140,6 +168,9 @@ __kernel void foopp(
        (finish)
        )
 )
+
+(my_pp :return_pp)
+
 
 ;;TODO... result is nill.... but was any work done?  Prove the buffer works, Test performance with this rifle idiom...   
 ;;TODO explore how compositon of pp and liquids could be achived...with this mechanisim...
@@ -196,9 +227,9 @@ __kernel void foopp(
 ;    ;(swap! init_liquid_status (fn [_] false))
 ;    )
 
-(defn funkymapfun [foo]
-  {:a (+ foo 5)})
-(:a (funkymapfun 10))
+;(defn funkymapfun [foo]
+;  {:a (+ foo 5)})
+;(:a (funkymapfun 10))
 
 
 
