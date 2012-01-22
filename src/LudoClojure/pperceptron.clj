@@ -7,11 +7,198 @@
 
 (set! *warn-on-reflection* false)
 
-(def pperceptrons (* 64))       ;Number of seperate paraller perceptrons
-(def p_per_pperceptron 5)       ;Number of perceptrons per parallel perceptron
-(def alphas_per_perceptron 64)  ;Number of links out of each perceptron to source data (these are the numer of weights that will be learned per each perceptron
-(def learningloops 50)          ;Number of learning flops before a hard stop
-(def epochs 10)                 ;Number of learning epochs over provided data before stop
+;;;TODO: DONE keep perceptron config in a map?
+
+(def pp_config 
+      {:pperceptrons 2         ;Number of seperate paraller perceptrons
+       :p_per_p 3              ;Number of perceptrons per parallel perceptron, must be odd, minimum is 3, 
+       :alphas_per_p 3})      ;Number of synaptic links out of each perceptron to source data (these are the numer of weights that will be learned per each perceptron)
+
+(def run_config
+      {:learningloops 50
+       :epochs 10})
+
+
+(defn size_of_alphas_array [app_config]
+  "returns size of the alphas array from a parallep perceptron config"
+     (* (:pperceptrons app_config)
+        (:p_per_p app_config)
+        (:alphas_per_p app_config)))
+
+
+;(:p_per_p pp_config)
+;(assoc run_config :epochs 15)
+;(size_of_alphas_array pp_config)
+
+(defn init_pp_alphas [app_config]
+  "returns a deterministic random intial alphas weight vector"
+   (doall
+   (let [r (java.util.Random. 12345)]
+     (loop [i 0 outlist ()]
+       (if (= i (size_of_alphas_array app_config) )
+         outlist
+         (recur (inc i) (conj outlist (* (float (.nextInt r 100)) 0.1)) ))))))
+
+;(init_pp_alphas pp_config)
+
+
+ ;;TODO     get liquids, but first pperceptrons to be objects.... so that we can hope to compose them later. 
+
+ ;read http://thinkrelevance.com/blog/2009/08/12/rifle-oriented-programming-with-clojure-2.html
+ ;read http://pramode.net/clojure/2010/05/26/creating-objects-in-clojure/
+ 
+
+
+
+
+;;TODO see if this rifle idiom will do it for me....
+(defn make-counter [init-val] 
+    (let [c (atom init-val)] 
+      {:next #(swap! c inc)
+       :reset #(reset! c init-val)}))
+(def c (make-counter 10))
+((c :next))
+((c :next))
+((c :reset))
+
+
+;;rifle Idiom with forms I may want to use....
+(defn make-myfoo [init-options] 
+    (let [c (atom "foo")] 
+      {:next #(swap! c (fn [_] 456))
+       :reset #(reset! c init-options)}))
+(def f (make-myfoo 10))
+((f :next))
+((f :next))
+((f :reset))
+
+(def sourceOpenCL2
+  "
+__kernel void foopp(
+    __global float *liquidState1_a,
+    __global float *liquidState1_b
+    )
+{
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+    liquidState1_b[gid] = liquidState1_a[gid];
+}
+  ")
+
+(defn make-pp [app_config]  
+"function for creating parallep perceptrons AKA pp's"
+    (let [pp 
+          (atom 
+                       ; {:alphas_array (wrap (init_pp_alphas app_config) :float32)
+                       ;  :pps  (create-buffer (size_of_alphas_array app_config) :float32)  ;array of parralel perceptrons
+                       ;  :ps   (create-buffer (size_of_alphas_array app_config) :float32)}       ;array of perceptrons
+                       "fooatom"
+                        )
+         
+          ]
+      ;;Now define the set of function that can be applied to pp
+      
+      {:init_pp 
+               ;(with-cl 
+                  #(swap! pp (fn [_] {:alphas_array (wrap (init_pp_alphas app_config) :float32)
+                                    :pps  (create-buffer (size_of_alphas_array app_config) :float32)  ;array of parralel perceptrons
+                                    :ps   (create-buffer (size_of_alphas_array app_config) :float32)}))
+                 ; )
+
+       :testflop_pp
+                       ;(with-cl 
+                       ;(with-program (compile-program sourceOpenCL2)
+                                           #(enqueue-kernel :foopp    ;;basic kernel for testsing
+                                                ;(size_of_alphas_array app_config)     ;;get the global sizes
+                                                4
+                                                (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
+                                                (:ps @pp))
+                       
+                      ; ))                            ;;pp as second buffer to    TODO clean this up, this is just to see it work.....
+                                         ;;TODO write the pp buffers here out of 'pp')
+       }
+       )
+     ;;TODO!!! instead of returning the pp itself, define the functions typically done within  with-cl, run program....
+    ;(enqueue-kernel :flopliquid globalsize conectivity liquidState1_A liquidState1_B liquidState2_A liquidState2_B debug_infobuff connections)
+ )
+
+
+
+;(with-cl (def my_pp (make-pp pp_config)) )    ;;This create a parallel perceptrons, initialised with the given config..., held in the atom that is my_pp
+;
+;(with-cl  (def my_pp (make-pp pp_config)))
+;(with-cl  ((my_pp :init_pp)))
+
+(with-cl 
+  (def my_pp (make-pp pp_config))
+  ((my_pp :init_pp))
+  ;;((my_pp :testflop_pp))
+  
+  (with-program (compile-program sourceOpenCL2)
+       ((my_pp :testflop_pp))
+       (enqueue-barrier)
+       (finish)
+       )
+)
+
+;;TODO... result is nill.... but was any work done?  Prove the buffer works, Test performance with this rifle idiom...   
+;;TODO explore how compositon of pp and liquids could be achived...with this mechanisim...
+
+
+
+
+;(def my_pp2 (make-pp pp_config))
+
+;
+
+
+
+
+;(with-cl  ((my_pp :init_pp)))
+
+
+
+
+
+
+
+   
+   
+;(println my_pp)
+;(println my_pp2)
+
+
+
+;(defn run_liquid! [globalsizeZ connections OpenCLSourceToUse]
+;  (with-cl
+;     (with-program (compile-program OpenCLSourceToUse)
+;          (if @flop_liquid_status (flop_liquid! globalsizeZ connections liquidState1_a liquidState1_b liquidState2_a liquidState2_b debug_infobuff))
+;        )
+;      "Terminating pp executon"
+;   ))
+
+
+
+
+
+
+
+
+
+;(defn init_ppons! [app_config]
+;  "Initialises the parallel perceptrons based on a config"
+;    (def {:alphas_array (wrap (init_pp_alphas app_config) :float32))
+;    (def liquidState1_b  (create-buffer globalsizeZ :float32))  ;Spike activatio0n buffer B of the state double buffer
+;    (def liquidState2_a  (wrap (random_liquid_seedZ globalsizeZ 1.0) :float32)) ;Activation potential buffer A of the state double buffer
+;    (def liquidState2_b  (create-buffer globalsizeZ :float32))  ;Activation potential buffer B of the state double buffer
+;    (enqueue-barrier)(finish)
+;    
+;    ;(swap! init_liquid_status (fn [_] false))
+;    )
+
+(defn funkymapfun [foo]
+  {:a (+ foo 5)})
+(:a (funkymapfun 10))
 
 
 
@@ -20,6 +207,8 @@
 ;;;; copied from liquid>>>
 
 ;;   (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
+
+(quote
 
 (def sourceOpenCL
   "
@@ -268,4 +457,6 @@ __kernel void flopliquid(
 ;   (swap! readout_liquid_status (fn [_] true))
 ;       (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
 
+end of quote
+)
 
