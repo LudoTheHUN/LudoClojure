@@ -151,6 +151,7 @@ __kernel void foopp(
   ((my_pp2 :init_pp))
   ;;((my_pp :testflop_pp))
   
+  ((my_pp :readout_pp) 0 3)
   (with-program (compile-program sourceOpenCL2)
        ((my_pp :testflop_pp))
        (enqueue-barrier)
@@ -164,17 +165,19 @@ __kernel void foopp(
 
 
 
-((my_pp :init_pp))
+;;((my_pp :init_pp))
 
 ;; TODO between the two with-cl contexts, are we looking at the same memory space...very same thing???   -- A: sames issues as before, you loose it as you loose the with-cl ,with-program scope 
 ;; NOTE , many initialisation eat up CL resources
-(with-cl 
-   (with-program (compile-program sourceOpenCL2)
-       ((my_pp :testflop_pp))
-       (enqueue-barrier)
-       (finish)
-       )
-   )
+
+
+;(with-cl 
+;   (with-program (compile-program sourceOpenCL2)
+;       ((my_pp :testflop_pp))
+;       (enqueue-barrier)
+;       (finish)
+;       )
+;   )
 
 
 
