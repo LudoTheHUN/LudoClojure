@@ -3,7 +3,6 @@
   (:gen-class))
 
 (use 'calx)
-(use 'LudoClojure.liquid)
 ;(use 'clojure.contrib.math)
 
 (set! *warn-on-reflection* false)
@@ -12,9 +11,7 @@
 ;;TODO: STARTED  get liquids, but first pperceptrons to be objects.... so that we can hope to compose them later. 
 ;read http://thinkrelevance.com/blog/2009/08/12/rifle-oriented-programming-with-clojure-2.html
 ;read http://pramode.net/clojure/2010/05/26/creating-objects-in-clojure/
-
-;;TODO:   Look at 'agents' aim to keep the openCL scope open and pass into it, so that buffers stay referencable.
-
+ 
 
 (def pp_config 
       {:pperceptrons 2         ;Number of seperate paraller perceptrons
@@ -57,7 +54,7 @@
      )
 )
 
-(def pp_openCL
+(def sourceOpenCL2
   "
 __kernel void foopp(
     __global float *liquidState1_a,
@@ -133,7 +130,7 @@ __kernel void foopp(
   ((my_pp :init_pp))
   ;;((my_pp :testflop_pp))
 
-  (with-program (compile-program pp_openCL)
+  (with-program (compile-program sourceOpenCL2)
 
 
        ((my_pp :testflop_pp))
@@ -142,7 +139,7 @@ __kernel void foopp(
        )
   ((my_pp :readout_pp) 0 3)
   
-  (with-program (compile-program pp_openCL)
+  (with-program (compile-program sourceOpenCL2)
        ((my_pp :testflop_pp_fn))
        (enqueue-barrier)
        (finish)
@@ -156,7 +153,7 @@ __kernel void foopp(
 (((my_pp :return_pp_current)) :alphas_array)
 
 
-(with-cl (with-program (compile-program pp_openCL)
+(with-cl (with-program (compile-program sourceOpenCL2)
    (def my_pp4 (make-pp pp_config))
    ((my_pp4 :init_pp))
    ((my_pp4 :readout_pp) 0 10)
@@ -186,7 +183,7 @@ __kernel void foopp(
   ;;((my_pp :testflop_pp))
   
   ((my_pp :readout_pp) 0 3)
-  (with-program (compile-program pp_openCL)
+  (with-program (compile-program sourceOpenCL2)
        ((my_pp :testflop_pp))
        (enqueue-barrier)
        (finish)
