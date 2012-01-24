@@ -81,46 +81,51 @@ __kernel void foopp(
                         )
           ]
       ;;Now define the set of function that can be applied to pp
-      {:init_pp 
-               ;(with-cl
+      {:init_pp! 
                   #(swap! pp (fn [_] {:alphas_array (wrap (init_pp_alphas app_config) :float32)
                                       :pps  (create-buffer (size_of_alphas_array app_config) :float32)  ;array of parralel perceptrons
-                                      :ps   (create-buffer (size_of_alphas_array app_config) :float32)}))
-                 ; )
-
-       :testflop_pp
-                       ;(with-cl 
-                       ;(with-program (compile-program sourceOpenCL2)
-                                           #(enqueue-kernel :foopp    ;;basic kernel for testsing
+                                      :ps   (create-buffer (size_of_alphas_array app_config) :float32)
+                                      :running true
+                                      :initialised true
+                                      :terminated true
+                                      }))
+       :testflop_pp!
+                                           #(if (= (:running @pp) true)
+                                            (enqueue-kernel :foopp    ;;basic kernel for testsing
                                                 (size_of_alphas_array app_config)     ;;get the global sizes
                                                 (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
-                                                (:ps @pp))
-                      ; ))
-       :testflop_pp_fn
+                                                (:alphas_array @pp)))
+       :testflop_pp_fn!
                                            (fn [] (enqueue-kernel :foopp    ;;basic kernel for testsing
                                                 (size_of_alphas_array app_config)     ;;get the global sizes
                                                 (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
                                                 (:ps @pp)
                                              ))
-
-                      ;;pp as second buffer to    TODO clean this up, this is just to see it work.....
-                                         ;;TODO write the pp buffers here out of 'pp')
-      ; :return_pp_orig @pp     ;;This is usless...
-       :testflop_selfpass_fn
+       ;;pp as second buffer to    TODO clean this up, this is just to see it work.....
+       ;;TODO write the pp buffers here out of 'pp')
+       ; :return_pp_orig @pp     ;;This is usless...
+       :testflop_selfpass_fn!
                                            (fn [buffer_passed_in] (enqueue-kernel :foopp    ;;basic kernel for testsing
                                                 (size_of_alphas_array app_config)     ;;get the global sizes
                                                 (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
                                                 buffer_passed_in
                                              ))
-                      
-       :return_pp_current (fn [] @pp)
-       :readout_pp    (fn [startread endread] (readout_float_buffer (:alphas_array @pp) startread endread))
-                      }
+
+       :return_pp_current   (fn [] @pp)
+       :readout_pp          (fn [startread endread] (readout_float_buffer (:alphas_array @pp) startread endread))
+       :stop_pp!             #(swap! pp (fn [x] (assoc x :running false)))    ;This is to let me stop or start execution of a pp...
+       :start_pp!            #(swap! pp (fn [x] (assoc x :running true)))
+       }
        )
      ;;TODO!!!DOING IT instead of returning the pp itself, define the functions typically done within  with-cl, run program....
     ;(enqueue-kernel :flopliquid globalsize conectivity liquidState1_A liquidState1_B liquidState2_A liquidState2_B debug_infobuff connections)
- )
+)
 
+
+
+(defn open_cl_threaded_executor [] 2)
+(defn init_openCL_queue)
+(defn add_to_openCL_queue)
 
 
 ;(with-cl (def my_pp (make-pp pp_config)) )    ;;This create a parallel perceptrons, initialised with the given config..., held in the atom that is my_pp
@@ -128,32 +133,86 @@ __kernel void foopp(
 ;(with-cl  (def my_pp (make-pp pp_config)))
 ;(with-cl  ((my_pp :init_pp)))
 
-(with-cl 
+
+
+(defn run_openCL! []
+(with-cl (with-program (compile-program pp_openCL)
   (def my_pp (make-pp pp_config))
-  ((my_pp :init_pp))
-  ;;((my_pp :testflop_pp))
-
-  (with-program (compile-program pp_openCL)
-
-
-       ((my_pp :testflop_pp))
-       (enqueue-barrier)
-       (finish)
-       )
-  ((my_pp :readout_pp) 0 3)
-  
-  (with-program (compile-program pp_openCL)
-       ((my_pp :testflop_pp_fn))
-       (enqueue-barrier)
-       (finish)
-       )
-  ((my_pp :readout_pp) 0 3)
-
-)
+  ((my_pp :init_pp!))
+  ((my_pp :testflop_pp!))
+  (enqueue-barrier)
+  (finish)
+  ;;((my_pp :readout_pp) 0 3)
+  ((my_pp :stop_pp!))
+  ((my_pp :testflop_pp!))
+  ;;((my_pp :readout_pp) 0 3)
+)))
 
 
+(defn run_openCL_steps [app] 
+  ((app :testflop_pp!))
+  (enqueue-barrier)
+  (finish)
+  ((app :readout_pp) 0 3)
+  ((app :testflop_pp!))
+  ((app :readout_pp) 0 3)
+  )
 
+
+(defn run_openCL_forever! []
+(.start (Thread. (fn []
+(with-cl (with-program (compile-program pp_openCL)
+  (def my_pp (make-pp pp_config))
+  ((my_pp :init_pp!))
+ ;;Put on loop
+  (loop [k 4]
+     (run_openCL_steps my_pp)
+     (Thread/sleep 1000)
+  (if (= k 1) 1 (recur (dec k) )))
+))
+))))
+
+(run_openCL_forever!)
+
+((my_pp :stop_pp!))
+
+((my_pp :start_pp!))
+
+
+
+
+
+
+;;TODO may not need these initailly to develop as I can get same behaviour without starting threads
+(defmacro forever [& body] 
+  `(while true (do
+                 ~@body
+                (Thread/sleep 100)  ;;Adding this wait time makes this not suck up the whole CPU... it does only 1000 things can be passed in per second.
+                )))
+(defn RunThisForAVeryLongTime [fn]
+(.start (Thread.
+          (fn [] (forever (while (= true false)
+           (do
+             (println "I was waiting all that time")
+             ;(swap! runInnerOpenCL (fn [_] false))
+             (Thread/sleep 100)))))   ;This is bad, without the sleep it just heats up the CPU
+             ;making it stop
+)))
+
+
+(quote
+(run_openCL!)
+((my_pp :stop_pp))
+(run_openCL!)
+((my_pp :start_pp))
+(((my_pp :return_pp_current)) :running)
+;;TODO, just need to add terminate, and put this on a loop on an agent?/thread?
+
+
+((my_pp :return_pp_current))
 (((my_pp :return_pp_current)) :alphas_array)
+(((my_pp :return_pp_current)) :running)
+
 
 
 (with-cl (with-program (compile-program pp_openCL)
@@ -197,7 +256,7 @@ __kernel void foopp(
 )
 
 
-
+)
 
 
 
