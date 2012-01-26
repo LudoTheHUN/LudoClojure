@@ -1,5 +1,6 @@
 (ns LudoClojure.string-deepfix
 (require [clojure.contrib.str-utils2 :as s])
+(require [clojure.contrib.json :as j])
   )
 
 (def customvalue "1,231.000")
@@ -104,8 +105,10 @@
 )
 
 
-
-
+     
+;;Json work here:  http://richhickey.github.com/clojure-contrib/json-api.html
+(j/json-str "foo")
+(println (j/json-str {:foo "34"}))
 
 ;(cleanup__clean_reverseconvention_number customvalue)
 
