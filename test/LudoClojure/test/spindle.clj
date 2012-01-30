@@ -3,6 +3,8 @@
   (:use [clojure.test])
   )
 
+(println "about to test LudoClojure.test.spindle")
+
 (use 'calx)
 
 (comment
@@ -182,4 +184,6 @@ __kernel void foopp(
 (defn test-ns-hook []
   (test_spindle_steps))
 
+
+(println "done tests in LudoClojure.test.spindle")
 

@@ -2,7 +2,7 @@
   (:use [LudoClojure.liquid])
   (:use [clojure.test])
   )
-
+(println "about to test LudoClojure.test.liquid")
 
 (deftest liquid_tests1
   (is (= connections 500)))
@@ -139,6 +139,8 @@
 (flop myliquid)
 
 )
+
+(println "done tests in LudoClojure.test.liquid")
 
 ;(+ 2 2)
 ;(liquid_tests1)

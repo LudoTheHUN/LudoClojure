@@ -7,6 +7,7 @@
   (:use [calx])
   )
 
+(println "about to test LudoClojure.test.pperceptron")
 ;;(use 'calx)
 (def testdata (make_test_array 20 40 3))
 
@@ -497,7 +498,7 @@
   )
 
 
-
+(println "done tests in LudoClojure.test.pperceptron")
 
   
   

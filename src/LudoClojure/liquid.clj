@@ -180,27 +180,29 @@ debug_infobuff[gid]= gid_to_read;
 
 (inject  [liquid input]
  "input is a vector or an  :float32-le calx buffer
- TODO, add vec overflow safey
- TODO  add destination parameter options?
- TODO make flipflop aware"
+ TODO, add vec overflow safey, if input larget then destination
+ TODO  add destination parameter options?.. not yet
+ TODO DONE make flipflop aware"
  (let [buf_to_inject 
        (cond 
          (cl-utils/is_buffer? input)
            input
          (vector? input)
-           (doall (lg_wrap (:context @(:liquid_opencl_env liquid)) (map float input) :float32-le)))]
+           (doall (lg_wrap (:context @(:liquid_opencl_env liquid)) (map float input) :float32-le)))
+       buf_to_inject_into (if @(:flipper liquid) :liquidState1_a_buf :liquidState1_b_buf )
+       ]
    (lg_enqueue-kernel ((:liquid_queue liquid) @(:liquid_opencl_env liquid)) (:progs @(:liquid_opencl_env liquid))
                             :copyFloatXtoY
-                            (cl-utils/buf_elements buf_to_inject) buf_to_inject (:liquidState1_a_buf liquid))
+                            (cl-utils/buf_elements buf_to_inject) buf_to_inject (buf_to_inject_into liquid))
    (lg_enqueue-marker (@(:liquid_opencl_env liquid)(:liquid_queue liquid)))
 ))
 
 
 
-(readoff_speced [liquid spec] "read the liquid state as specified by the spec"
+(readoff_speced [liquid spec] "read the liquid state as specified by the spec, spec is a vec of start index, end index, eg: [0 12]"
   ;;TODO make :pp_answer_buf the default read out
   (let [flipbit @(:flipper liquid)]
-    (if flipbit 
+    (if flipbit
         @(lg_enqueue-read (:liquidState1_b_buf liquid) ((:liquid_queue liquid) @(:liquid_opencl_env liquid)) spec)
         @(lg_enqueue-read (:liquidState1_a_buf liquid) ((:liquid_queue liquid) @(:liquid_opencl_env liquid)) spec)
         )))

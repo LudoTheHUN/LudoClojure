@@ -4,6 +4,7 @@
   (:use [clojure.test])
 
   )
+(println "about to do tests in LudoClojure.test.spinopencl")
 
 ;Make an empty openCL spindle
 (def opencl_spindle (make_spindle 100 10))
@@ -156,6 +157,7 @@
 )
 
 
+(println "dones tests in LudoClojure.test.spinopencl")
 
 
 

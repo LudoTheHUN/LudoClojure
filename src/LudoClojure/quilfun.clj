@@ -264,22 +264,27 @@
 
 
 ; (def quil_liquid (make_liquid {:liquidsize (* 500) :connections 3}))   ;;interesting
-(def quil_liquid (make_liquid {:liquidsize (* 64 64) :connections 100}))   ;;interesting
+(def quil_liquid (make_liquid {:liquidsize (* 64 64 2) :connections 100}))   ;;interesting
+(def quil_connections 110)
+(def quil_connections 102)
+
 ;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 3}))   ;;interesting
 ;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 200}))   ;;interesting
 ;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 0}))   ;;interesting
 
-(readoff_speced quil_liquid [0 20])
+(readoff_speced quil_liquid [6 5])
 ;;  (inject quil_liquid (vec (repeat (* 64 6) 10.0)))
 ;;  (inject quil_liquid (vec (repeat (* 64 32) 0.0)))
 ;;  (inject quil_liquid (vec (repeat (* 64) 10.0)))
 
-(defn drap_liquid [] 
+(defn draw_liquid [] 
    (do 
-    (flop (conj quil_liquid {:connections 109}))
+    (flop (conj quil_liquid {:connections quil_connections}))
+    
     ;(inject quil_liquid (vec (repeat (* 64) 10.0)))
     ;(point @xpoint (random (height)))
-   (let [liquid_state (readoff_speced quil_liquid [0 1000])]
+   (let [liquid_state (readoff_speced quil_liquid [0 8192])
+         total_activation (reduce + liquid_state)]
      (do ;(println liquid_state)
          (doall
            (map 
@@ -291,7 +296,12 @@
                       ;(point 400 x)
                       (line (+ @xpoint 20) x 1900 x)
                       )))
-             (range 1000))))
+             (range 1000)))
+       (do (stroke 100 0 0)
+           (line (+ @xpoint 20) 40 (+ @xpoint 20) (+ 40 (/ total_activation 100))))
+       (writoutstuff (str "total liqu act: " (int total_activation))          0 (- (height) 80) 150 10)
+       
+       )
     )
    ))
 
@@ -325,7 +335,7 @@
 
 
    ;;liquid drawing
-   (drap_liquid)
+   (draw_liquid)
    
    (writoutstuff (str "@frmecounter " @frmecounter)      0 0  150 10)
    (writoutstuff (str "@xpoint" @xpoint)                 0 10 150 10)
