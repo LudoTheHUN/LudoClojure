@@ -55,9 +55,10 @@
 (defn readout_float_buffer [whichbuffer start_read_at end_read_at]
     (let [buffer_data (^floats float-array (deref (enqueue-read whichbuffer [start_read_at end_read_at])))]
      (enqueue-barrier)(finish)
-     (println (map  (fn [x] (nth buffer_data x))(range 0 (- end_read_at start_read_at))))
-     buffer_data
-     )
+     (let [clj_arrayout (map  (fn [x] (nth buffer_data x))(range 0 (- end_read_at start_read_at)))]
+     (println clj_arrayout)
+     clj_arrayout
+     ))
 )
 
 (def pp_openCL
@@ -76,14 +77,10 @@ __kernel void foopp(
 (defn make-pp [app_config]  
 "function for creating parallep perceptrons AKA pp's"
     (let [pp 
-          (atom 
-                       ; {:alphas_array (wrap (init_pp_alphas app_config) :float32)
-                       ;  :pps  (create-buffer (size_of_alphas_array app_config) :float32)  ;array of parralel perceptrons
-                       ;  :ps   (create-buffer (size_of_alphas_array app_config) :float32)}       ;array of perceptrons
-                       "this parallel perceptron needs to be initalised first before it is used, initialise with :init_pp"
-                        )
+          (atom  "this parallel perceptron needs to be initalised within with-cl first before it is used, initialise with :init_pp")
           ]
       ;;Now define the set of function that can be applied to pp
+      ;;TODO add a global pp iteration number
       {:init_pp! 
                   #(swap! pp (fn [_] {:alphas_array (wrap (init_pp_alphas app_config) :float32)
                                       :pps  (create-buffer (size_of_alphas_array app_config) :float32)  ;array of parralel perceptrons
@@ -91,6 +88,8 @@ __kernel void foopp(
                                       :running true
                                       :initialised true
                                       :terminated true
+                                      :pps_clj_array []
+                                      :current_instructions (atom (fn [x] (println "nothig set to do within pp")))
                                       }))
        :testflop_pp!
                                            #(if (:running @pp)
@@ -117,6 +116,9 @@ __kernel void foopp(
        :return_pp_current   (fn [] @pp)
        :alphas_array_only   (fn [] (:alphas_array @pp))  ;;Could make this expose the 'current' array from a double buffer pair, thus allwoing easy 'infection' of data into a the neuron block entitiy
        :readout_pp          (fn [startread endread] (readout_float_buffer (:alphas_array @pp) startread endread))
+       :readout_pp_clj      (fn [startread endread] (swap! pp (fn [x] (assoc x :pps_clj_array
+                                                                                         (readout_float_buffer (:alphas_array @pp) startread endread)
+                                                                                         ))))
        :stop_pp!             #(swap! pp (fn [x] (assoc x :running false)))    ;This is to let me stop or start execution of a pp...
        :start_pp!            #(swap! pp (fn [x] (assoc x :running true)))
        :nuke_pp!             #(swap! pp (fn [x] (do (println "nuking")
@@ -124,6 +126,9 @@ __kernel void foopp(
                                                     (release! (:pps x))
                                                     (release! (:ps x))
                                                     "pp was nuked")))
+       :ret_pps_clj_array       (fn [] (:pps_clj_array @pp))
+       :set_instructions_here   (fn [] (:current_instructions @pp))
+       :do_instructions         (fn [x] (@(:current_instructions @pp) x))
        }
        )
      ;;TODO!!!DOING IT instead of returning the pp itself, define the functions typically done within  with-cl, run program....
@@ -135,44 +140,124 @@ __kernel void foopp(
 ;;;;;TEST HERE!!;;;;;TEST HERE!!;;;;;TEST HERE!!;;;;;TEST HERE!!;;;;;TEST HERE!!
 
 
-(defn run_openCL_steps [a_pp] 
-  ((a_pp :testflop_pp!))
-  (enqueue-barrier)
-  (finish)
-  ((a_pp :readout_pp) 0 3)
-  ((a_pp :testflop_pp!))
-  ((a_pp :readout_pp) 0 3)
-  )
 
-(def my_pp (make-pp pp_config))
+;define an atom of opencl function to execute
 
-(defn start_pp_openCL_on_thread! [run-opencl_functions a_pp]
+
+;(@openCL_instructions_atom)
+
+(defn start_pp_openCL_on_thread! [a_pp1 a_pp2]
 (.start (Thread. (fn []
 (with-cl (with-program (compile-program pp_openCL)
-  ((a_pp :init_pp!))
+  ((a_pp1 :init_pp!))
+  ((a_pp2 :init_pp!))
  ;;Put on loop
-  (loop [k 20]
+  (loop [k 200]
      (println "on step:" k)
-     
-     (run-opencl_functions a_pp)   ;; TODO we want to be changing the set of instruction being done on this thread at run time...
-     
-     (Thread/sleep 1)
+     ((a_pp1 :do_instructions) a_pp1)
+     ((a_pp2 :do_instructions) a_pp2)
+     ;(run-opencl_functions a_pp)   ;; TODO DONE we want to be changing the set of instruction being done on this thread at run time...ie: another rifle loaded with functionality?
+     (Thread/sleep 200)
   (if (= k 1) 1 (recur (dec k) )))
 
-((a_pp :nuke_pp!))
-))
-))))
+((a_pp1 :nuke_pp!))
+((a_pp2 :nuke_pp!))
+))))))
+
+;;;Start work here:
+
+(defn do_stuff0a [a_pp]
+(swap! ((a_pp :set_instructions_here)) (fn [_] 
+      (fn [a_pp] (do
+       nil)
+      ))))
+
+(defn do_stuff1a [a_pp]
+(swap! ((a_pp :set_instructions_here)) (fn [_] 
+      (fn [a_pp] (do
+       ((a_pp :readout_pp) 0 3))
+      ))))
+
+(defn do_stuff2a [a_pp]
+  (swap! ((a_pp :set_instructions_here)) (fn [_] 
+      (fn [a_pp] (do
+       ((a_pp :testflop_pp!))
+       (enqueue-barrier)
+       (finish)
+       ((a_pp :readout_pp) 0 3)
+       ((a_pp :testflop_pp!))
+       ((a_pp :readout_pp_clj) 0 3))))))
+
+;;TODO create a demo (defn do_stuff3 [a_pp1 a_pp2] ...) that will compose pp,  note, specific buffer level exposure to pp would be required? + dedicated openCL kernels
 
 
-;(start_pp_openCL_on_thread! run_openCL_steps my_pp)
+(def my_pp1 (make-pp pp_config))
+(def my_pp2 (make-pp pp_config))
+
+(start_pp_openCL_on_thread! my_pp1 my_pp2)
+(Thread/sleep 200)
+
+(do_stuff1a my_pp1)
+(do_stuff1a my_pp2)
+
+(do_stuff2a my_pp1)
+(do_stuff2a my_pp2)
+
+(do_stuff0a my_pp1)
+(do_stuff0a my_pp2)
+
+
+;mock (defn do_stuff_to_two_pp  [pp1 pp2]
+;
+
+((my_pp1 :ret_pps_clj_array))       ; gets back an array value.
+((my_pp2 :ret_pps_clj_array))
+((my_pp1 :set_instructions_here))   ; This is the atom holiding the current instructions
+
+;;TODO get data out of pp as a normal clojure return, based on an input, without the risk of world moving along... and without stopping other work done on the thread after the return... and with thread safety (if 100 thread call same function)
+;;     Take the existing instructions, 'save them on the side', 
+;;     devote one openCL loop to the openCL computation requested, wait for one itteration to pass by on the openCL thread with the replaced instructions.
+;;     aim: given clj array input, function return cljoutput,
+;;     write output to clj out array (on internal atom), put original instruction 'back in',and return the clj array from the pp atom... Thus totaly hiding the fact work was done on a seperate thread and in openCL from the caller.
+;;     Caller must not need to be within with-cl, pp will have to be 'running' on a start_pp_openCL_on_thread!
+
+
+
+
+;mock    (defn ask_pp [a_pp clj_array_question] ....)  ->  clj array answer. 
+
+
+
+
+
+
+
 
 ;((my_pp :return_pp_current))
-
 ;(with-cl  ((my_pp :init_pp!)) ((my_pp :nuke_pp!)))
 
 
 
 ;;;;;TEST END HERE!!;;;;;TEST END HERE!!;;;;;TEST END HERE!!;;;;;TEST END HERE!!;;;;;TEST END HERE!!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 (defn open_cl_threaded_executor [] 2)
 (defn init_openCL_queue)
