@@ -15,14 +15,17 @@
 
 ;;TODO:   Look at 'agents' aim to keep the openCL scope open and pass into it, so that buffers stay referencable.
 
+; TODO (compile-program pp_openCL) should be on a closure with via a let!
+
+; TODO breakout the creation function to be top level functions 
 
 (def pp_config 
-      {:pperceptrons 2         ;Number of seperate paraller perceptrons
+      {:pperceptrons 2         ;Number of seperate paraller perceptrons, easy one can be considered a seperate estimator of a supervised learning signal being provided.
        :p_per_p 3              ;Number of perceptrons per parallel perceptron, must be odd, minimum is 3, 
-       :alphas_per_p 3})      ;Number of synaptic links out of each perceptron to source data (these are the numer of weights that will be learned per each perceptron)
+       :alphas_per_p 3})       ;Number of synaptic links out of each perceptron to source data (these are the numer of weights that will be learned per each perceptron)
 
 (def run_config
-      {:learningloops 50
+      {:learningloops 50       ;
        :epochs 10})
 
 
@@ -90,16 +93,16 @@ __kernel void foopp(
                                       :terminated true
                                       }))
        :testflop_pp!
-                                           #(if (= (:running @pp) true)
-                                            (enqueue-kernel :foopp    ;;basic kernel for testsing
-                                                (size_of_alphas_array app_config)     ;;get the global sizes
-                                                (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
-                                                (:alphas_array @pp)))
+                                           #(if (:running @pp)
+                                                (enqueue-kernel :foopp    ;;basic kernel for testsing
+                                                 (size_of_alphas_array app_config)     ;;get the global sizes
+                                                 (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
+                                                 (:alphas_array @pp)))
        :testflop_pp_fn!
                                            (fn [] (enqueue-kernel :foopp    ;;basic kernel for testsing
-                                                (size_of_alphas_array app_config)     ;;get the global sizes
-                                                (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
-                                                (:ps @pp)
+                                                   (size_of_alphas_array app_config)     ;;get the global sizes
+                                                   (:alphas_array @pp)                   ;;the alphas_array of pp as first buffer to be passed to kernel...
+                                                   (:ps @pp)
                                              ))
        ;;pp as second buffer to    TODO clean this up, this is just to see it work.....
        ;;TODO write the pp buffers here out of 'pp')
@@ -112,9 +115,15 @@ __kernel void foopp(
                                              ))
 
        :return_pp_current   (fn [] @pp)
+       :alphas_array_only   (fn [] (:alphas_array @pp))  ;;Could make this expose the 'current' array from a double buffer pair, thus allwoing easy 'infection' of data into a the neuron block entitiy
        :readout_pp          (fn [startread endread] (readout_float_buffer (:alphas_array @pp) startread endread))
        :stop_pp!             #(swap! pp (fn [x] (assoc x :running false)))    ;This is to let me stop or start execution of a pp...
        :start_pp!            #(swap! pp (fn [x] (assoc x :running true)))
+       :nuke_pp!             #(swap! pp (fn [x] (do (println "nuking")
+                                                    (release! (:alphas_array x))
+                                                    (release! (:pps x))
+                                                    (release! (:ps x))
+                                                    "pp was nuked")))
        }
        )
      ;;TODO!!!DOING IT instead of returning the pp itself, define the functions typically done within  with-cl, run program....
@@ -122,6 +131,48 @@ __kernel void foopp(
 )
 
 
+
+;;;;;TEST HERE!!;;;;;TEST HERE!!;;;;;TEST HERE!!;;;;;TEST HERE!!;;;;;TEST HERE!!
+
+
+(defn run_openCL_steps [a_pp] 
+  ((a_pp :testflop_pp!))
+  (enqueue-barrier)
+  (finish)
+  ((a_pp :readout_pp) 0 3)
+  ((a_pp :testflop_pp!))
+  ((a_pp :readout_pp) 0 3)
+  )
+
+(def my_pp (make-pp pp_config))
+
+(defn start_pp_openCL_on_thread! [run-opencl_functions a_pp]
+(.start (Thread. (fn []
+(with-cl (with-program (compile-program pp_openCL)
+  ((a_pp :init_pp!))
+ ;;Put on loop
+  (loop [k 20]
+     (println "on step:" k)
+     
+     (run-opencl_functions a_pp)   ;; TODO we want to be changing the set of instruction being done on this thread at run time...
+     
+     (Thread/sleep 1)
+  (if (= k 1) 1 (recur (dec k) )))
+
+((a_pp :nuke_pp!))
+))
+))))
+
+
+;(start_pp_openCL_on_thread! run_openCL_steps my_pp)
+
+;((my_pp :return_pp_current))
+
+;(with-cl  ((my_pp :init_pp!)) ((my_pp :nuke_pp!)))
+
+
+
+;;;;;TEST END HERE!!;;;;;TEST END HERE!!;;;;;TEST END HERE!!;;;;;TEST END HERE!!;;;;;TEST END HERE!!
 
 (defn open_cl_threaded_executor [] 2)
 (defn init_openCL_queue)
@@ -136,7 +187,8 @@ __kernel void foopp(
 
 
 (defn run_openCL! []
-(with-cl (with-program (compile-program pp_openCL)
+  "a bad way to do this"
+(with-cl (with-program (compile-program pp_openCL)     ;TODO(compile-program pp_openCL) should be on a closure with via a let!
   (def my_pp (make-pp pp_config))
   ((my_pp :init_pp!))
   ((my_pp :testflop_pp!))
@@ -149,35 +201,30 @@ __kernel void foopp(
 )))
 
 
-(defn run_openCL_steps [app] 
-  ((app :testflop_pp!))
-  (enqueue-barrier)
-  (finish)
-  ((app :readout_pp) 0 3)
-  ((app :testflop_pp!))
-  ((app :readout_pp) 0 3)
-  )
 
 
-(defn run_openCL_forever! []
-(.start (Thread. (fn []
-(with-cl (with-program (compile-program pp_openCL)
-  (def my_pp (make-pp pp_config))
-  ((my_pp :init_pp!))
- ;;Put on loop
-  (loop [k 4]
-     (run_openCL_steps my_pp)
-     (Thread/sleep 1000)
-  (if (= k 1) 1 (recur (dec k) )))
-))
-))))
 
-(run_openCL_forever!)
 
-((my_pp :stop_pp!))
 
-((my_pp :start_pp!))
 
+
+
+;(run_openCL_forever!)
+
+
+;(Thread/sleep 100)   ; sleep so that there is enough time to create my_pp????
+;((my_pp :stop_pp!))
+
+;((my_pp :start_pp!))
+;((my_pp :alphas_array_only))
+;;moc for copying part between liquids
+
+;(defn copybetweenliquid [liq1 liq2] 
+;      (runsomeopenCLkernel ((liq1 :buff1)) ((liq1 :buff1))))
+
+;:alphas_array_only
+
+;;((my_pp :return_pp_current))
 
 
 
@@ -189,6 +236,7 @@ __kernel void foopp(
                  ~@body
                 (Thread/sleep 100)  ;;Adding this wait time makes this not suck up the whole CPU... it does only 1000 things can be passed in per second.
                 )))
+
 (defn RunThisForAVeryLongTime [fn]
 (.start (Thread.
           (fn [] (forever (while (= true false)
@@ -288,21 +336,8 @@ __kernel void foopp(
 
 ;(def my_pp2 (make-pp pp_config))
 
-;
-
-
-
-
 ;(with-cl  ((my_pp :init_pp)))
 
-
-
-
-
-
-
-   
-   
 ;(println my_pp)
 ;(println my_pp2)
 
@@ -315,11 +350,6 @@ __kernel void foopp(
 ;        )
 ;      "Terminating pp executon"
 ;   ))
-
-
-
-
-
 
 
 
