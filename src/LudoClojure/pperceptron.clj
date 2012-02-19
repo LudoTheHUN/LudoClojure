@@ -78,6 +78,7 @@ __kernel void foopp(
 "function for creating parallep perceptrons AKA pp's"
     (let [pp 
           (atom  "this parallel perceptron needs to be initalised within with-cl first before it is used, initialise with :init_pp")
+          ;;TODO a second atom for large responses???
           ]
       ;;Now define the set of function that can be applied to pp
       ;;TODO add a global pp iteration number
@@ -154,10 +155,11 @@ __kernel void foopp(
  ;;Put on loop
   (loop [k 200]
      (println "on step:" k)
-     ((a_pp1 :do_instructions) a_pp1)
+     ((a_pp1 :do_instructions) a_pp1)     ;consider using this here: http://blog.marrowboy.co.uk/2011/10/21/worker-queues-in-clojure/
      ((a_pp2 :do_instructions) a_pp2)
+     
      ;(run-opencl_functions a_pp)   ;; TODO DONE we want to be changing the set of instruction being done on this thread at run time...ie: another rifle loaded with functionality?
-     (Thread/sleep 200)
+     (Thread/sleep 20)
   (if (= k 1) 1 (recur (dec k) )))
 
 ((a_pp1 :nuke_pp!))
@@ -188,6 +190,20 @@ __kernel void foopp(
        ((a_pp :testflop_pp!))
        ((a_pp :readout_pp_clj) 0 3))))))
 
+(defn do_stuff3a_normalreturn [a_pp]
+  (swap! ((a_pp :set_instructions_here)) (fn [_] 
+      (fn [a_pp] (do
+       ((a_pp :testflop_pp!))
+       (enqueue-barrier)
+       (finish)
+       ((a_pp :readout_pp) 0 3)
+       ((a_pp :testflop_pp!))
+       ((a_pp :readout_pp_clj) 0 3)   ;;;What if this wrote answers to a map of answers, where the key was something unique to this one very call of this function. This function could then wait untill its response value show'ed up
+                                      ;;;Danger is instructions would get lost, swaped over before they had a chance to get executed. Solution: block if instruction are not empty? Not very concurent....
+     ))))
+  ((a_pp :ret_pps_clj_array))
+)
+
 ;;TODO create a demo (defn do_stuff3 [a_pp1 a_pp2] ...) that will compose pp,  note, specific buffer level exposure to pp would be required? + dedicated openCL kernels
 
 
@@ -195,7 +211,7 @@ __kernel void foopp(
 (def my_pp2 (make-pp pp_config))
 
 (start_pp_openCL_on_thread! my_pp1 my_pp2)
-(Thread/sleep 200)
+(Thread/sleep 2000)
 
 (do_stuff1a my_pp1)
 (do_stuff1a my_pp2)
@@ -206,6 +222,8 @@ __kernel void foopp(
 (do_stuff0a my_pp1)
 (do_stuff0a my_pp2)
 
+(do_stuff3a_normalreturn my_pp1)
+
 
 ;mock (defn do_stuff_to_two_pp  [pp1 pp2]
 ;
@@ -214,8 +232,66 @@ __kernel void foopp(
 ((my_pp2 :ret_pps_clj_array))
 ((my_pp1 :set_instructions_here))   ; This is the atom holiding the current instructions
 
+
+
+
+
+
+(quote ;Messing about with queues
+
+(conj clojure.lang.PersistentQueue/EMPTY "foo")
+(def aPersistentQueue clojure.lang.PersistentQueue/EMPTY)    ;;This could help above.... all requests are added to a queue
+(peek (conj (pop (conj aPersistentQueue 1 2 3)) 42))
+(pop aPersistentQueue)
+
+(-> (clojure.lang.PersistentQueue/EMPTY)
+          
+          )
+;(2 3)
+
+(defn new-q [] (java.util.concurrent.LinkedBlockingDeque.))
+(defn offer! 
+  "adds x to the back of queue q"
+  [q x] (.offer q x) q)
+(defn take! 
+  "takes from the front of queue q.  blocks if q is empty"
+  [q] (.take q))
+(def example-queue1 (new-q))
+;; background thread, blocks waiting for something to print
+(future (println ">> " (take! example-queue1))) 
+;; the future-d thread will be unblocked and ">> HELLO WORLD" is printed.
+(offer! example-queue1 "HELLO WORLD") 
+
+
+;;;;;The return
+;; THREAD 1
+(def example-queue2 (new-q))
+(def answer (promise))
+
+(.start (Thread. 
+ (do 
+ (offer! example-queue2 {:q "how much?" :a answer})
+ (println "The thread is waiting for an answer")
+ (println @answer)
+ (println "An answer got delivered") 
+ )))   ; blocks, until... 
+
+;; THREAD 2
+(.start (Thread. 
+   (do (let [msg (take! example-queue2)]
+       (deliver (msg :a) "£3.650")
+       "done"
+       ))))
+
+)
+
+;; THREAD 1
+; now unblocked, prints "£3.50"
+
+
+
 ;;TODO get data out of pp as a normal clojure return, based on an input, without the risk of world moving along... and without stopping other work done on the thread after the return... and with thread safety (if 100 thread call same function)
-;;     Take the existing instructions, 'save them on the side', 
+;;     Take the existing instructions, 'save them on the side'... or add to queue? Or have the whole thing on a queue?
 ;;     devote one openCL loop to the openCL computation requested, wait for one itteration to pass by on the openCL thread with the replaced instructions.
 ;;     aim: given clj array input, function return cljoutput,
 ;;     write output to clj out array (on internal atom), put original instruction 'back in',and return the clj array from the pp atom... Thus totaly hiding the fact work was done on a seperate thread and in openCL from the caller.
