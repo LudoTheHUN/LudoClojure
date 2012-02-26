@@ -19,6 +19,9 @@
 
 ; TODO breakout the creation function to be top level functions 
 
+
+;TODO introduce a global queue to the one openCL thread?
+
 (def pp_config 
       {:pperceptrons 2         ;Number of seperate paraller perceptrons, easy one can be considered a seperate estimator of a supervised learning signal being provided.
        :p_per_p 3              ;Number of perceptrons per parallel perceptron, must be odd, minimum is 3, 
@@ -127,7 +130,7 @@ __kernel void foopp(
                                                     (release! (:pps x))
                                                     (release! (:ps x))
                                                     "pp was nuked")))
-       :ret_pps_clj_array       (fn [] (:pps_clj_array @pp))
+       :ret_pps_clj_array       (fn [] (:pps_clj_array @pp))   ;promblem is timing, this array my be changed by another call...
        :set_instructions_here   (fn [] (:current_instructions @pp))
        :do_instructions         (fn [x] (@(:current_instructions @pp) x))
        }
@@ -157,9 +160,10 @@ __kernel void foopp(
      (println "on step:" k)
      ((a_pp1 :do_instructions) a_pp1)     ;consider using this here: http://blog.marrowboy.co.uk/2011/10/21/worker-queues-in-clojure/
      ((a_pp2 :do_instructions) a_pp2)
+     ;;To make this go into queues, does it make sense to have the pp here?.... better to just have a global queue?... make the queue the parameter... queue knowns for which pp it is doing work next...
      
      ;(run-opencl_functions a_pp)   ;; TODO DONE we want to be changing the set of instruction being done on this thread at run time...ie: another rifle loaded with functionality?
-     (Thread/sleep 20)
+     (Thread/sleep 200)
   (if (= k 1) 1 (recur (dec k) )))
 
 ((a_pp1 :nuke_pp!))
@@ -168,7 +172,9 @@ __kernel void foopp(
 
 ;;;Start work here:
 
+
 (defn do_stuff0a [a_pp]
+"this is thread unsafe since the "
 (swap! ((a_pp :set_instructions_here)) (fn [_] 
       (fn [a_pp] (do
        nil)
@@ -201,7 +207,7 @@ __kernel void foopp(
        ((a_pp :readout_pp_clj) 0 3)   ;;;What if this wrote answers to a map of answers, where the key was something unique to this one very call of this function. This function could then wait untill its response value show'ed up
                                       ;;;Danger is instructions would get lost, swaped over before they had a chance to get executed. Solution: block if instruction are not empty? Not very concurent....
      ))))
-  ((a_pp :ret_pps_clj_array))
+  ((a_pp :ret_pps_clj_array))   ; The work on the tight loop might/will not happen in time for the return to be as per this functions instructions.
 )
 
 ;;TODO create a demo (defn do_stuff3 [a_pp1 a_pp2] ...) that will compose pp,  note, specific buffer level exposure to pp would be required? + dedicated openCL kernels
@@ -222,7 +228,7 @@ __kernel void foopp(
 (do_stuff0a my_pp1)
 (do_stuff0a my_pp2)
 
-(do_stuff3a_normalreturn my_pp1)
+(do_stuff3a_normalreturn my_pp1)      ;This is introducing a function that appears normal in that returns, but it does have side effects.
 
 
 ;mock (defn do_stuff_to_two_pp  [pp1 pp2]
@@ -232,7 +238,7 @@ __kernel void foopp(
 ((my_pp2 :ret_pps_clj_array))
 ((my_pp1 :set_instructions_here))   ; This is the atom holiding the current instructions
 
-
+(count ((my_pp1 :ret_pps_clj_array)))
 
 
 
