@@ -20,19 +20,30 @@
 
 ;TODO   strucutued queue of id:functions, must be compatible with rifle pperceptrons.
 
-(def aPersistentQueue (ref {:jobid 0 :queue clojure.lang.PersistentQueue/EMPTY }))
+(def aPersistentQueue (ref {:jobid 0 :response {} :queue clojure.lang.PersistentQueue/EMPTY }))
 
 
 ;;;http://www.ibm.com/developerworks/java/library/wa-clojure/index.html
 (defn add_to_queue [queue_name functiontoenque]
   "this gets called outside openCL thread, but passes in commands to be done within openCL context"
    ;TODO must return job ID under which job is being submited, so that return can be read of later from results map
-   (dosync (ref-set queue_name (assoc @queue_name 
-                                  :jobid (inc (:jobid @queue_name)) 
-                                  :queue (conj (:queue @queue_name) [(:jobid @queue_name) functiontoenque])))))
+   (let [local_jobid (ref :notset)]
+   (dosync    (ref-set local_jobid (:jobid @queue_name))
+              (ref-set queue_name (assoc @queue_name 
+                                  :jobid (inc (:jobid @queue_name))
+                                  :response (conj (:response @queue_name) [(:jobid @queue_name) :awaiting_response])
+                                  :queue (conj (:queue @queue_name) [(:jobid @queue_name) functiontoenque])))
+           ;;Also add a place holder responce onto the response atom
+     )
+     @local_jobid))
 
+
+; Something like this passes in openCL calls, outside of the openCL scope
 (add_to_queue aPersistentQueue (fn [] "foo"))
 (add_to_queue aPersistentQueue (fn [] "boo"))
+(add_to_queue aPersistentQueue (fn [] (+ 1 2)))
+(add_to_queue aPersistentQueue (fn [] (println 4)))
+(add_to_queue aPersistentQueue (fn [] (println (+ 1 2))))
 
 ;(defn perma_pop [queue_name]
 ;     (swap! queue_name (fn [x] (assoc x :queue (pop (:queue x)))))
@@ -42,47 +53,118 @@
 
 (defn make_a_response [itemarray]
   "second items is expected to be a function, it will be executed here"
-    {(first itemarray) ((second itemarray))})
+    [(first itemarray) ((second itemarray))])
 
 (defn do_and_pop_queue_item [queue_name]
   "as super safe, I hope, queue and runner, this runs in openCL context"
-    (let [local_queue (ref 67)]
+    (let [local_queue (ref :notset)]
             (dosync 
-                             (ref-set local_queue @queue_name)
+                             (ref-set local_queue (@queue_name :queue))
                              (ref-set queue_name (assoc @queue_name :queue (pop (:queue @queue_name)))))
-      ;;TODO make a catch here that will stop an empty queue from doing much....
-      (make_a_response (peek (@local_queue :queue)))))
+      ;;TODO make a catch here that will stop an empty queue from doing much....eg not erroring...
+      (if (peek @local_queue)
+          (make_a_response (peek @local_queue))
+          nil
+               )))
 
-(def response_mapatom (atom {}))
 
-(defn gather_responses [response_mapatom response]
+
+;(defn gather_responses_old [response_mapatom response]
+;    "this holds results of computations done on openCL"
+;       (swap! response_mapatom  (fn [x] (conj x response))))
+
+(defn gather_responses [queue_name response]
     "this holds results of computations done on openCL"
-       (swap! response_mapatom  (fn [x] (conj x response))))
+       (if response
+       (dosync
+           (ref-set queue_name (assoc @queue_name 
+                                   :response (conj (:response @queue_name) [(first response) (second response)]))))))
 
 
-(do_and_pop_queue_item aPersistentQueue)
+;;;; This will not write to responses, so never do it on its onwn:
+;(do_and_pop_queue_item aPersistentQueue)
 
 "something like this runs under openCL" 
-(gather_responses response_mapatom (do_and_pop_queue_item aPersistentQueue))
+(gather_responses aPersistentQueue (do_and_pop_queue_item aPersistentQueue))
 
 
-response_mapatom
+
+
+(defn read_response [jobid queue_name]
+    (let [response ((:response @queue_name) jobid)]
+      (if (= response :awaiting_response)
+        :awaiting_response
+         (dosync
+           (ref-set queue_name (assoc @queue_name 
+                                   :response (dissoc (:response @queue_name) jobid)))))
+      response))
+
+;You can read response only once... unless result is :awaiting_response, in which case, keep trying to get a value out...
+(read_response 28 aPersistentQueue)
+
+
+
+;Putting it all together....
+(defn start_pp_openCL_on_thread! [queue_name pp_openCL]
+(.start (Thread. (fn []
+;(with-cl (with-program (compile-program pp_openCL)
+ ;;Put on loop
+   (loop [k 200000]
+     ;(println "on step:" k)
+     (gather_responses queue_name (do_and_pop_queue_item queue_name))
+     
+     ;TODO have a status i nthe quenue object!
+     (Thread/sleep 2000)
+  (if (= k 1) 1 (recur (dec k) )))
+;))
+))))
+;TODO!! prevent the same queue_name from being run twice with queue runnig state
+(start_pp_openCL_on_thread! aPersistentQueue "")
+
+
+
+(add_to_queue aPersistentQueue (fn [] "boo"))
+(add_to_queue aPersistentQueue (fn [] (+ 1 2)))
+(add_to_queue aPersistentQueue (fn [] (println 45)))
+
+(add_to_queue aPersistentQueue (fn [] (do (println (+ 1 2)) "fooo")))
+(read_response 112 aPersistentQueue)
+
+(quote moc!
+
+       
+       ;CONTINUE HERE
+       
+(defn done_remotely [queue_name fun]
+    (let [response_is_on_id (add_to_queue queue_name fun)]   ; assuming the queue is running
+       ;!!! can use while the test will destroy the value we want to read off!, (while 
+ ;          (let resonse [(read_response response_is_on_id queue_name)]
+  ;       (= (read_response response_is_on_id queue_name) :awaiting_response))
+   ;    (read_response response_is_on_id queue_name)))
+
+(done_remotely aPersistentQueue (fn [] (do (println (+ 1 2)) "fooo")))
+(done_remotely aPersistentQueue (fn [] 64))
+
+
+))
+
+;Results get gathered up in a response map like this:
+
+;(defn read_response_mapatom_OLD [jobid response_mapatom]
+;    (let [response (@response_mapatom jobid)]
+;      (swap! response_mapatom  (fn [x] (dissoc x jobid)))
+;      response))
+;
+;(read_response_mapatom 2 response_mapatom)
+
+;Reading off a response needs to purge the map of the result, to keep size down...
 
 ;TODO 
 
-
-
-
-   ; (swap! queue_name (fn [x] (assoc x :queue (pop (:queue x)))))
-
-
-   
+; (swap! queue_name (fn [x] (assoc x :queue (pop (:queue x)))))
 ;((second (peek (@aPersistentQueue :queue))))
 
-
 (peek (@aPersistentQueue :queue))
-
-
 (peek (pop (@aPersistentQueue :queue)))
 (peek (pop (pop (@aPersistentQueue :queue))))
 
