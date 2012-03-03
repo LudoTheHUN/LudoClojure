@@ -19,8 +19,9 @@
 ;;Mocking out a remote queue out system...
 
 ;TODO   strucutued queue of id:functions, must be compatible with rifle pperceptrons.
+(defn make_new_openCL_queue [] (ref {:jobid 0 :response {} :queue clojure.lang.PersistentQueue/EMPTY }))
 
-(def aPersistentQueue (ref {:jobid 0 :response {} :queue clojure.lang.PersistentQueue/EMPTY }))
+(def aPersistentQueue (make_new_openCL_queue))
 
 
 ;;;http://www.ibm.com/developerworks/java/library/wa-clojure/index.html
@@ -100,25 +101,27 @@
       response))
 
 ;You can read response only once... unless result is :awaiting_response, in which case, keep trying to get a value out...
-(read_response 28 aPersistentQueue)
+(read_response 15 aPersistentQueue)
 
 
 
 ;Putting it all together....
 (defn start_pp_openCL_on_thread! [queue_name pp_openCL]
+  ;;TODO Add a check to ensure the queue is not already running
+  ;;TODO Add a decomission mechanisim
 (.start (Thread. (fn []
 ;(with-cl (with-program (compile-program pp_openCL)
  ;;Put on loop
-   (loop [k 200000]
+   (loop [k 2000000]
      ;(println "on step:" k)
      (gather_responses queue_name (do_and_pop_queue_item queue_name))
      
      ;TODO have a status i nthe quenue object!
-     (Thread/sleep 2000)
+     (Thread/sleep 1)
   (if (= k 1) 1 (recur (dec k) )))
 ;))
 ))))
-;TODO!! prevent the same queue_name from being run twice with queue runnig state
+;TODO!! prevent the same queue_name executor from being run(initiated) twice with queue runnig state
 (start_pp_openCL_on_thread! aPersistentQueue "")
 
 
@@ -128,25 +131,43 @@
 (add_to_queue aPersistentQueue (fn [] (println 45)))
 
 (add_to_queue aPersistentQueue (fn [] (do (println (+ 1 2)) "fooo")))
-(read_response 112 aPersistentQueue)
+
 
 (quote moc!
 
-       
+
        ;CONTINUE HERE
        
-(defn done_remotely [queue_name fun]
-    (let [response_is_on_id (add_to_queue queue_name fun)]   ; assuming the queue is running
+(defn do_via_queue! [queue_name fun]
+ (let [response_is_on_id (add_to_queue queue_name fun)]   ; assuming the queue is running
        ;!!! can use while the test will destroy the value we want to read off!, (while 
+   (loop [k 1000]
+      (let [response (read_response response_is_on_id queue_name)]
+           (if (or (not (= response :awaiting_response)) (= k 0))
+               (if 
+                   (= k 0)
+                   :response_timeout
+                   response)
+               (do (Thread/sleep 1) (recur (dec k))))))))
+           
+     ;(println "on step:" k)
+ 
+     
+     ;TODO have a status in the quenue object!
+
+            
  ;          (let resonse [(read_response response_is_on_id queue_name)]
   ;       (= (read_response response_is_on_id queue_name) :awaiting_response))
    ;    (read_response response_is_on_id queue_name)))
 
-(done_remotely aPersistentQueue (fn [] (do (println (+ 1 2)) "fooo")))
-(done_remotely aPersistentQueue (fn [] 64))
+(do_via_queue! aPersistentQueue (fn [] (do (Thread/sleep 25) (println (+ 69 2)) "fooo")))
+(keys (@aPersistentQueue :response))
+(do_via_queue! aPersistentQueue (fn [] 64))
+               
+)
 
+@aPersistentQueue
 
-))
 
 ;Results get gathered up in a response map like this:
 
