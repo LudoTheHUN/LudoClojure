@@ -1,6 +1,7 @@
-(ns LudoClojure.mocs)
+(ns LudoClojure.mocs
+  (:require calx))
 
-
+(use 'calx)
 
 ;Here I'll try to mock out high level functions for liquids, paralel perceptrons and thier composig...
 
@@ -109,7 +110,10 @@
 (defn start_pp_openCL_on_thread! [queue_name pp_openCL]
   ;;TODO Add a check to ensure the queue is not already running
   ;;TODO Add a decomission mechanisim
-(.start (Thread. (fn []
+
+  (.start (Thread. (fn []
+     (with-cl (with-program (compile-program pp_openCL)
+  
 ;(with-cl (with-program (compile-program pp_openCL)
  ;;Put on loop
    (loop [k 2000000]
@@ -120,9 +124,24 @@
      (Thread/sleep 1)
   (if (= k 1) 1 (recur (dec k) )))
 ;))
-))))
+))))))
 ;TODO!! prevent the same queue_name executor from being run(initiated) twice with queue runnig state
-(start_pp_openCL_on_thread! aPersistentQueue "")
+
+(def pp_openCL
+  "
+__kernel void foopp(
+    __global float *liquidState1_a,
+    __global float *liquidState1_b
+    )
+{
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+    liquidState1_b[gid] = liquidState1_a[gid] + 1.01;
+}
+  ")
+
+
+(start_pp_openCL_on_thread! aPersistentQueue pp_openCL)
 
 
 
@@ -131,9 +150,6 @@
 (add_to_queue aPersistentQueue (fn [] (println 45)))
 
 (add_to_queue aPersistentQueue (fn [] (do (println (+ 1 2)) "fooo")))
-
-
-(quote moc!
 
 
        ;CONTINUE HERE
@@ -164,9 +180,32 @@
 (keys (@aPersistentQueue :response))
 (do_via_queue! aPersistentQueue (fn [] 64))
                
-)
 
 @aPersistentQueue
+
+
+
+(println "quick openCL test, works a charm")
+
+;(def conectivity     (wrap ([12 13 5 45] 3) :int32))
+(do_via_queue! aPersistentQueue (fn [] (def openclarray     (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
+(do_via_queue! aPersistentQueue (fn [] (def openclarray2     (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
+
+
+(do_via_queue! aPersistentQueue (fn [] (enqueue-kernel :foopp 4 openclarray openclarray2  )))
+
+(defn readout_float_buffer [whichbuffer start_read_at end_read_at]
+    (let [buffer_data (^floats float-array (deref (enqueue-read whichbuffer [start_read_at end_read_at])))]
+     (enqueue-barrier)(finish)
+     (let [clj_arrayout (map  (fn [x] (nth buffer_data x))(range 0 (- end_read_at start_read_at)))]
+     (println clj_arrayout)
+     clj_arrayout
+     ))
+)
+(do_via_queue! aPersistentQueue (fn [] (readout_float_buffer openclarray 0 4)))
+(do_via_queue! aPersistentQueue (fn [] (readout_float_buffer openclarray2 0 4)))
+
+
 
 
 ;Results get gathered up in a response map like this:
