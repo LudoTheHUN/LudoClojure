@@ -1,5 +1,5 @@
 (ns LudoClojure.liquid
-  (:require calx)
+  ;(:require calx)
   (:gen-class))
 
 (use 'calx)

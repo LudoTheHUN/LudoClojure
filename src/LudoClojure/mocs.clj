@@ -1,5 +1,6 @@
 (ns LudoClojure.mocs
-  (:require calx))
+  ;(:require calx)
+  )
 
 (use 'calx)
 
@@ -191,8 +192,8 @@ __kernel void foopp(
 (do_via_queue! aPersistentQueue (fn [] (def openclarray     (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
 (do_via_queue! aPersistentQueue (fn [] (def openclarray2     (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
 
-
 (do_via_queue! aPersistentQueue (fn [] (enqueue-kernel :foopp 4 openclarray openclarray2  )))
+(do_via_queue! aPersistentQueue (fn [] (enqueue-kernel :foopp 4 openclarray2 openclarray  )))
 
 (defn readout_float_buffer [whichbuffer start_read_at end_read_at]
     (let [buffer_data (^floats float-array (deref (enqueue-read whichbuffer [start_read_at end_read_at])))]
@@ -202,6 +203,7 @@ __kernel void foopp(
      clj_arrayout
      ))
 )
+
 (do_via_queue! aPersistentQueue (fn [] (readout_float_buffer openclarray 0 4)))
 (do_via_queue! aPersistentQueue (fn [] (readout_float_buffer openclarray2 0 4)))
 

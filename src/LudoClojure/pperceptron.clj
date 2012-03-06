@@ -1,5 +1,5 @@
 (ns LudoClojure.pperceptron
-  (:require calx)
+  ;(:require calx)
   (:gen-class))
 
 (use 'calx)
