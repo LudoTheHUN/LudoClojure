@@ -6,6 +6,9 @@
 
 ;Here I'll try to mock out high level functions for liquids, paralel perceptrons and thier composig...
 
+;TODO the queue entry needs to hold the thread object of the caller, so that the calling thread can be interupted.
+;At startup, the tread object of the executor should be put on the queue object so that the calling thread can wake up the executor when there is work to do
+
 
 
 ;(def my_pp (make-pp aconfig))   ; makes a paralel perceptron called my_pp
@@ -59,7 +62,7 @@
     [(first itemarray) ((second itemarray))])
 
 (defn do_and_pop_queue_item [queue_name]
-  "as super safe, I hope, queue and runner, this runs in openCL context"
+  "as super safe, I hope, queue and runner, this is intended to run in openCL context"
     (let [local_queue (ref :notset)]
             (dosync 
                              (ref-set local_queue (@queue_name :queue))
@@ -77,7 +80,7 @@
 ;       (swap! response_mapatom  (fn [x] (conj x response))))
 
 (defn gather_responses [queue_name response]
-    "this holds results of computations done on openCL"
+    "this gathers up results of computations done on openCL onto a map of jobid to response values"
        (if response
        (dosync
            (ref-set queue_name (assoc @queue_name 
@@ -111,14 +114,15 @@
 (defn start_pp_openCL_on_thread! [queue_name pp_openCL]
   ;;TODO Add a check to ensure the queue is not already running
   ;;TODO Add a decomission mechanisim
+ 
 
   (.start (Thread. (fn []
      (with-cl (with-program (compile-program pp_openCL)
-  
 ;(with-cl (with-program (compile-program pp_openCL)
  ;;Put on loop
    (loop [k 2000000]
      ;(println "on step:" k)
+     ;just have this loop for ever while running
      (gather_responses queue_name (do_and_pop_queue_item queue_name))
      
      ;TODO have a status i nthe quenue object!
@@ -152,21 +156,19 @@ __kernel void foopp(
 
 (add_to_queue aPersistentQueue (fn [] (do (println (+ 1 2)) "fooo")))
 
-
        ;CONTINUE HERE
        
 (defn do_via_queue! [queue_name fun]
  (let [response_is_on_id (add_to_queue queue_name fun)]   ; assuming the queue is running
        ;!!! can use while the test will destroy the value we want to read off!, (while 
-   (loop [k 1000]
+   (loop [k 10000]     ;;TODO replace this with an interupt on the function's calling thread object
       (let [response (read_response response_is_on_id queue_name)]
            (if (or (not (= response :awaiting_response)) (= k 0))
                (if 
                    (= k 0)
                    :response_timeout
                    response)
-               (do (Thread/sleep 1) (recur (dec k))))))))
-           
+               (do (Thread/sleep 1) (recur (dec k))))))))    ;looping like this seems bad, java.util.concurrent is supposed to have features fo this...
      ;(println "on step:" k)
  
      
@@ -193,7 +195,11 @@ __kernel void foopp(
 (do_via_queue! aPersistentQueue (fn [] (def openclarray2     (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
 
 (do_via_queue! aPersistentQueue (fn [] (enqueue-kernel :foopp 4 openclarray openclarray2  )))
-(do_via_queue! aPersistentQueue (fn [] (enqueue-kernel :foopp 4 openclarray2 openclarray  )))
+(time (do_via_queue! aPersistentQueue (fn [] (enqueue-kernel :foopp 4 openclarray2 openclarray  ))))
+
+(time (let [foo 4] 
+    (do_via_queue! aPersistentQueue (fn [] (enqueue-kernel :foopp foo openclarray2 openclarray  )))))
+;lexical closure still works
 
 (defn readout_float_buffer [whichbuffer start_read_at end_read_at]
     (let [buffer_data (^floats float-array (deref (enqueue-read whichbuffer [start_read_at end_read_at])))]
@@ -204,7 +210,7 @@ __kernel void foopp(
      ))
 )
 
-(do_via_queue! aPersistentQueue (fn [] (readout_float_buffer openclarray 0 4)))
+(time (do_via_queue! aPersistentQueue (fn [] (readout_float_buffer openclarray 0 4))))
 (do_via_queue! aPersistentQueue (fn [] (readout_float_buffer openclarray2 0 4)))
 
 
@@ -229,6 +235,36 @@ __kernel void foopp(
 (peek (@aPersistentQueue :queue))
 (peek (pop (@aPersistentQueue :queue)))
 (peek (pop (pop (@aPersistentQueue :queue))))
+
+
+(def foo (atom "threadopbject"))
+(.start (Thread.
+  (fn [] 
+     (swap! foo (fn [x] (Thread/currentThread)))
+      (println "before sleep")
+      
+     (try (Thread/sleep 10000) (catch InterruptedException e (println "rise and shine")))
+     
+     (loop [k 1000000000]
+          (if (= k 0)
+                   :got_to_the_end
+                   (recur (dec k))
+                   )
+               )
+      (println "and done"))))
+
+
+;;Method being called on an object!!!
+;;(.getId @foo)
+(.interrupt @foo)
+;;(.notify @foo)
+
+
+
+
+
+
+
 
 
 
