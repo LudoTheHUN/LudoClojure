@@ -1,8 +1,136 @@
-(ns LudoClojure.mocs
-  ;(:require calx)
-  )
+(ns ^{:doc "Spindle a spining reactor like construct for teleporting unevaluated functions and their returns values between threads for use in siturations where the scope of a thread is expensive to bootstap eg within calx with cl scopes."
+    :author "LudoTheHUN"}
+   LudoClojure.spindle)
 
 (use 'calx)
+
+
+(defn make_spindle [] 
+  ^{:doc "Creates a spindle. Holds id that will be assigned to the next task, 
+          a set of uncollected responses (return values of functions)
+          and a queue of tasks that are waiting to be carries out"}
+   (ref {:jobid 0 :response {} :queue clojure.lang.PersistentQueue/EMPTY }))
+
+
+
+;(def a_spindle (make_spindle))
+
+(defn weave_on! [spindle fun]
+  ^{:doc "Adds a function to be executed onto the spindle specified. You can 
+          call this function on any thread. Returns the jobid linking this call 
+          with the eventual answer
+          Should return very quickly"}
+ (let [local_jobid (ref :notset)]
+    (dosync (ref-set local_jobid (:jobid @spindle))
+            (ref-set spindle 
+               (assoc @spindle 
+                  :jobid 
+                     (inc (:jobid @spindle))
+                  :response 
+                     (conj (:response @spindle) 
+                           [(:jobid @spindle) (atom :awaiting_response)])
+                  :queue 
+                     (conj (:queue @spindle) 
+                            [(:jobid @spindle) fun]))))
+  @local_jobid))
+
+
+(defn do_job- [job]
+^{:doc "takes a job tuple and creates the done job tuple, executes the given
+        function held in the job"}
+    [(first job) ((second job))])
+
+
+
+(defn spin_once! [spindle]
+^{:doc "Takes a job off the spindle and executes it
+        No retries are possible.
+        The spinning should be done on the target thread which has the expensive
+        openCL context."}
+ (let [local_job (ref :notset)]
+    (dosync 
+       (ref-set local_job (peek (@spindle :queue)))
+       (ref-set spindle (assoc @spindle :queue (pop (:queue @spindle)))))
+    (if @local_job
+       (do_job- @local_job)
+       nil)))
+
+
+(defn spool_on! [spindle done_job]
+    "Puts the spup once work onto the spindle responce map of jobid:atoms"
+    (let [response_atom_to_update ((@spindle :response) (first done_job))]
+       (if done_job
+         (swap! response_atom_to_update (fn [_] (second done_job))))))
+
+
+;;;;OK to here....
+(defn spin! [spindle]
+  "Works through one item of work that is queued on the spindle
+   Should be run on the openCL thread"
+  ;;TODO write tests
+    (spool_on! spindle (spin_once! spindle)))
+
+
+
+(defn spool_off! [jobid spindle]
+  "Returns a responce for a jobid, if a response is found, removes the job
+   responce from the spool"
+  ;;Test
+  ;;TODO write tests
+  ;;TODO catch errors is there is no jobid responce
+    (let [response @((:response @spindle) jobid)]
+      (if (= response :awaiting_response)
+        :awaiting_response
+         (dosync
+           (ref-set spindle (assoc @spindle 
+                                   :response (dissoc (:response @spindle) jobid)))))
+      response))
+
+
+   ;;stub!
+;;WIP!!
+(quote
+  (defn weave_off! []
+    ;;STUB!!!
+  )
+  
+  
+(defn weave! [spindle fun]
+  "Returns the response of the provided function via the spindle round trip"
+ (let [jobid (weave_on! spindle fun)]   ; assuming the queue is running
+       ;!!! can use while the test will destroy the value we want to read off!, (while 
+   (loop [k 10000]     ;;TODO replace this with an interupt on the function's calling thread object
+      (let [response (spool_off! jobid spindle)]
+           (if (or (not (= response :awaiting_response)) (= k 0))
+               (if 
+                   (= k 0)
+                   :response_timeout
+                   response)
+               (do (Thread/sleep 1) (recur (dec k))))))))
+)
+
+      ;;;Old approach was changing the ref.... but the ref already holds the atom which we want to deliver the answer to
+         ;;so just local and deliver the answer....
+       ;(dosync
+       ;    (ref-set spindle (assoc @spindle 
+       ;                            :response (conj (:response @spindle) done_job))))))
+
+
+
+(comment
+(def  foo_spindle (make_spindle))
+(weave_on! foo_spindle #(+ 3 6))
+
+(spin_once! foo_spindle)
+((@foo_spindle :response) 0)
+(swap! ((@foo_spindle :response) 0) (fn [_](+ 42)))
+(spool_on! foo_spindle [0 798])
+
+(spool_on! foo_spindle (spin_once! foo_spindle))
+(spin! foo_spindle)
+)
+
+;;;;;;;;;;;;;;;;OLD CODE BELOW THIS LINE ONLY;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;Here I'll try to mock out high level functions for liquids, paralel perceptrons and thier composig...
 
@@ -15,7 +143,9 @@
 
 ;((my_pp :init_pp!))
 
-
+(comment 
+  
+  
 (def a (atom 10000000))
 (time (while (pos? @a) (do (swap! a dec))))
 
@@ -110,7 +240,7 @@
 (read_response 15 aPersistentQueue)
 
 
-
+;;This is an example use case...
 ;Putting it all together....
 (defn start_pp_openCL_on_thread! [queue_name pp_openCL]
   ;;TODO Add a check to ensure the queue is not already running
@@ -157,6 +287,7 @@ __kernel void foopp(
 
        ;CONTINUE HERE
 
+       ;;name to be changed to weave_off!
 (defn do_via_queue! [queue_name fun]
  (let [response_is_on_id (add_to_queue queue_name fun)]   ; assuming the queue is running
        ;!!! can use while the test will destroy the value we want to read off!, (while 
@@ -237,9 +368,6 @@ __kernel void foopp(
 (peek (pop (@aPersistentQueue :queue)))
 (peek (pop (pop (@aPersistentQueue :queue))))
 
-
-
-
 ;;;; This is mostly to show that intrupting threads is fast (enough).... 0.05ms per interupt.
 
 (def foo (atom "threadopbject"))
@@ -304,5 +432,8 @@ __kernel void foopp(
       (println "and done"))))
   
   (recur (dec threadnumber)))))
+
+
+)
 
 
