@@ -39,7 +39,30 @@ This is the old values that was here....
 (deftest test_spool_on!
    (is (= (spool_on! test_spindle [0 "some done work"])) "some done work")
    )
+
+(deftest test_spin!
+   (weave_on! test_spindle #(+ 43))
+   (is (= (spin! test_spindle) 43))
    
+   (weave_on! test_spindle #(+ 44))
+   (weave_on! test_spindle #(+ 45))
+   (is (= (spin! test_spindle) 44))
+   (is (= (spin! test_spindle) 45))
+   )
+
+(deftest test_spool_off!
+   (let [jobid (weave_on! test_spindle #(+ 46))]
+    (spin! test_spindle)
+    (is (= (spool_off! test_spindle jobid)) 46))
+   
+   (let [jobid2 (weave_on! test_spindle #(+ 47))]
+    ;;(spin! test_spindle)   result will not be available yet...
+    (is (= (spool_off! test_spindle jobid2) :awaiting_response))
+    (spin! test_spindle)
+    (is (= (spool_off! test_spindle jobid2) 47))
+    (is (= (spool_off! test_spindle jobid2) :response_missing)))
+   )
+
 
 ;;This forces test to be done in sequence, which is needed here because of the 
 ;;statefull nature.
@@ -48,7 +71,9 @@ This is the old values that was here....
    (test_weave_on!)
    (test_spindle_contents_after_weave_on)
    (test_spin_once!)
-   (test_spool_on!))
+   (test_spool_on!)
+   (test_spin!)
+   (test_spool_off!))
 
 (defn test-ns-hook []
   (test_spindle_steps))

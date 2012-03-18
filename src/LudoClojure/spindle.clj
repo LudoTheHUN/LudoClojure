@@ -1,4 +1,7 @@
-(ns ^{:doc "Spindle a spining reactor like construct for teleporting unevaluated functions and their returns values between threads for use in siturations where the scope of a thread is expensive to bootstap eg within calx with cl scopes."
+(ns ^{:doc "Spindle a spining reactor like construct for teleporting unevaluated 
+      functions and their returns values between threads for use in siturations 
+      where the scope of a thread is expensive to bootstap eg: with calx with 
+      opencl scopes."
     :author "LudoTheHUN"}
    LudoClojure.spindle)
 
@@ -62,29 +65,34 @@
        (if done_job
          (swap! response_atom_to_update (fn [_] (second done_job))))))
 
-
-;;;;OK to here....
 (defn spin! [spindle]
   "Works through one item of work that is queued on the spindle
-   Should be run on the openCL thread"
-  ;;TODO write tests
+   Should be run on the expensive openCL thread"
     (spool_on! spindle (spin_once! spindle)))
 
 
-
-(defn spool_off! [jobid spindle]
-  "Returns a responce for a jobid, if a response is found, removes the job
-   responce from the spool"
-  ;;Test
-  ;;TODO write tests
-  ;;TODO catch errors is there is no jobid responce
-    (let [response @((:response @spindle) jobid)]
+(defn spool_off! [spindle jobid]
+  "Returns a responce for a jobid, 
+   if the response is found, removes the job response from spindle
+   if response is still :awaiting_response, returns :awaiting_response
+   if there is no response, returns :response_missing
+   Does not guarantee that if two threads reading off a jobid from a spindle at
+     the very same time with end with exactly only one having the answer"
+  ;;TODO  , put everything in dosync so that one amswer is guaranteed to be 
+  ;;retived once??
+    (let [response 
+                (try @((:response @spindle) jobid) 
+                   (catch java.lang.NullPointerException e :response_missing))
+                ]
       (if (= response :awaiting_response)
         :awaiting_response
          (dosync
            (ref-set spindle (assoc @spindle 
-                                   :response (dissoc (:response @spindle) jobid)))))
+                               :response (dissoc (:response @spindle) jobid)))))
       response))
+
+;;;;OK to here....
+
 
 
    ;;stub!
@@ -93,8 +101,8 @@
   (defn weave_off! []
     ;;STUB!!!
   )
-  
-  
+
+
 (defn weave! [spindle fun]
   "Returns the response of the provided function via the spindle round trip"
  (let [jobid (weave_on! spindle fun)]   ; assuming the queue is running
@@ -109,14 +117,6 @@
                (do (Thread/sleep 1) (recur (dec k))))))))
 )
 
-      ;;;Old approach was changing the ref.... but the ref already holds the atom which we want to deliver the answer to
-         ;;so just local and deliver the answer....
-       ;(dosync
-       ;    (ref-set spindle (assoc @spindle 
-       ;                            :response (conj (:response @spindle) done_job))))))
-
-
-
 (comment
 (def  foo_spindle (make_spindle))
 (weave_on! foo_spindle #(+ 3 6))
@@ -127,8 +127,21 @@
 (spool_on! foo_spindle [0 798])
 
 (spool_on! foo_spindle (spin_once! foo_spindle))
+
+(weave_on! foo_spindle #(+ 10))
 (spin! foo_spindle)
+(spool_off! foo_spindle 2)
 )
+
+
+      ;;;Old approach was changing the ref.... but the ref already holds the atom which we want to deliver the answer to
+         ;;so just local and deliver the answer....
+       ;(dosync
+       ;    (ref-set spindle (assoc @spindle 
+       ;                            :response (conj (:response @spindle) done_job))))))
+
+
+
 
 ;;;;;;;;;;;;;;;;OLD CODE BELOW THIS LINE ONLY;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
