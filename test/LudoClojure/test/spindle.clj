@@ -48,6 +48,7 @@ This is the old values that was here....
    (weave_on! test_spindle #(+ 45))
    (is (= (spin! test_spindle) 44))
    (is (= (spin! test_spindle) 45))
+   (is (= (spin! test_spindle) :nothing_to_spin))
    )
 
 (deftest test_spool_off!
@@ -64,6 +65,19 @@ This is the old values that was here....
    )
 
 
+(deftest test_weave_off!
+   (let [jobid3 (weave_on! test_spindle #(+ 48))]
+     (is (= (weave_off! test_spindle jobid3) :response_timeout))
+     (spin! test_spindle)
+     (is (= (weave_off! test_spindle jobid3) 48))
+     (is (= (weave_off! test_spindle jobid3) :response_missing))))
+
+
+(deftest test_weave!
+    (is (= (weave! test_spindle (fn [] (+ 4 6))) :response_timeout))
+    ;;Note: can not get a responce if the spindle is not spinning
+    )
+
 ;;This forces test to be done in sequence, which is needed here because of the 
 ;;statefull nature.
 (deftest test_spindle_steps
@@ -73,7 +87,10 @@ This is the old values that was here....
    (test_spin_once!)
    (test_spool_on!)
    (test_spin!)
-   (test_spool_off!))
+   (test_spool_off!)
+   (test_weave_off!)
+   (test_weave!))
+
 
 (defn test-ns-hook []
   (test_spindle_steps))

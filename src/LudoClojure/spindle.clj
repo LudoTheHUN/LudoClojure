@@ -2,17 +2,24 @@
       functions and their returns values between threads for use in siturations 
       where the scope of a thread is expensive to bootstap eg: with calx with 
       opencl scopes."
-    :author "LudoTheHUN"}
+      :author "LudoTheHUN"}
    LudoClojure.spindle)
 
 (use 'calx)
 
 
-(defn make_spindle [] 
+(defn make_spindle 
   ^{:doc "Creates a spindle. Holds id that will be assigned to the next task, 
           a set of uncollected responses (return values of functions)
           and a queue of tasks that are waiting to be carries out"}
-   (ref {:jobid 0 :response {} :queue clojure.lang.PersistentQueue/EMPTY }))
+   ([] (make_spindle 1000 1))
+   ([weave_off_retries weave_off_ms_wait] 
+   (ref {:jobid 0 
+         :response {}
+         :queue clojure.lang.PersistentQueue/EMPTY
+         :spinning? false
+         :weave_off_retries weave_off_retries
+         :weave_off_ms_wait weave_off_ms_wait})))
 
 
 
@@ -50,35 +57,43 @@
         No retries are possible.
         The spinning should be done on the target thread which has the expensive
         openCL context."}
+  ;;;BUG  -- does not return the evaluated work, just :nothing_to_spin
  (let [local_job (ref :notset)]
     (dosync 
        (ref-set local_job (peek (@spindle :queue)))
-       (ref-set spindle (assoc @spindle :queue (pop (:queue @spindle)))))
+       (if (= nil @local_job)
+         
+         :nothing_to_spin
+         (ref-set spindle (assoc @spindle :queue (pop (:queue @spindle))))))
     (if @local_job
        (do_job- @local_job)
-       nil)))
+       :nothing_to_spin)))
 
 
 (defn spool_on! [spindle done_job]
     "Puts the spup once work onto the spindle responce map of jobid:atoms"
+   (if (= done_job :nothing_to_spin)
+    :nothing_to_spin
     (let [response_atom_to_update ((@spindle :response) (first done_job))]
-       (if done_job
-         (swap! response_atom_to_update (fn [_] (second done_job))))))
+      (swap! response_atom_to_update (fn [_] (second done_job))))))
 
 (defn spin! [spindle]
   "Works through one item of work that is queued on the spindle
    Should be run on the expensive openCL thread"
-    (spool_on! spindle (spin_once! spindle)))
+  (let [spun_result (spin_once! spindle)]
+    (if (= spun_result :nothing_to_spin)
+        :nothing_to_spin
+        (spool_on! spindle spun_result))))
 
 
 (defn spool_off! [spindle jobid]
   "Returns a responce for a jobid, 
-   if the response is found, removes the job response from spindle
-   if response is still :awaiting_response, returns :awaiting_response
+   if the response is found, removes the job response from spindle response map.
+   If response is still :awaiting_response, returns :awaiting_response
    if there is no response, returns :response_missing
    Does not guarantee that if two threads reading off a jobid from a spindle at
      the very same time with end with exactly only one having the answer"
-  ;;TODO  , put everything in dosync so that one amswer is guaranteed to be 
+  ;;TODO maybe, put everything in dosync so that one amswer is guaranteed to be 
   ;;retived once??
     (let [response 
                 (try @((:response @spindle) jobid) 
@@ -91,31 +106,57 @@
                                :response (dissoc (:response @spindle) jobid)))))
       response))
 
-;;;;OK to here....
 
-
-
-   ;;stub!
 ;;WIP!!
-(quote
-  (defn weave_off! []
-    ;;STUB!!!
-  )
-
-
-(defn weave! [spindle fun]
-  "Returns the response of the provided function via the spindle round trip"
- (let [jobid (weave_on! spindle fun)]   ; assuming the queue is running
-       ;!!! can use while the test will destroy the value we want to read off!, (while 
-   (loop [k 10000]     ;;TODO replace this with an interupt on the function's calling thread object
-      (let [response (spool_off! jobid spindle)]
-           (if (or (not (= response :awaiting_response)) (= k 0))
+(defn weave_off! [spindle jobid]
+  "trys to spool_off! results from spindle untill retry attempts run out
+   gives up if result is :response_missing"
+   (let  [weave_off_retries (@spindle :weave_off_retries)
+          weave_off_ms_wait (@spindle :weave_off_ms_wait)]
+    (loop [k weave_off_retries]
+         ;;TODO write Doc
+         ;;TODO write tests
+         ;;TODO replace this with an interupt on the function's calling thread object?? nahhh
+         ;;make retries and sleep time a keyvale pair within the spindle
+         ;TODO add functionality to test the spindle is spinning somewhere..., this is a property of the spindle
+      (let [response (spool_off! spindle jobid )]
+           (if (or (not (= response :awaiting_response)) (= response :response_missing)(= k 0))
                (if 
                    (= k 0)
                    :response_timeout
                    response)
-               (do (Thread/sleep 1) (recur (dec k))))))))
+               (do (Thread/sleep weave_off_ms_wait) (recur (dec k))))))))
+
+
+(defn weave! [spindle fun]
+  "Returns the response of the provided function via the spindle round trip"
+  ;;TODO write doc
+  ;;TODO write more tests!!
+  (let [jobid (weave_on! spindle fun)]   ; assuming the queue is running
+    (weave_off! spindle jobid)))
+
+;;;;OK to here....
+
+
+(comment
+;;;;MOC!!
+  
+(defn make_spinner [queue_name]
+  ;;TODO Add a check to ensure the queue is not already running
+  ;;TODO Add a decomission mechanisim
+  (fn [] 
+       (.start (Thread. (fn []
+;(with-cl (with-program (compile-program pp_openCL)
+ ;;Put on loop
+         (while true
+     ;(println "on step:" k)
+     ;just have this loop for ever while running
+           (do (spin! spindle))
+     ;TODO have a status i nthe quenue object!
+           (Thread/sleep 1)))))))
 )
+ 
+
 
 (comment
 (def  foo_spindle (make_spindle))
@@ -131,6 +172,9 @@
 (weave_on! foo_spindle #(+ 10))
 (spin! foo_spindle)
 (spool_off! foo_spindle 2)
+
+(weave_off! foo_spindle 1)
+(weave_off! foo_spindle 3)
 )
 
 
