@@ -28,7 +28,7 @@
 (defn weave_on! [spindle fun]
   ^{:doc "Adds a function to be executed onto the spindle specified. You can 
           call this function on any thread. Returns the jobid linking this call 
-          with the eventual answer
+          with the eventual answer. Adds an entry onto response: awaiting answer
           Should return very quickly"}
  (let [local_jobid (ref :notset)]
     (dosync (ref-set local_jobid (:jobid @spindle))
@@ -41,14 +41,32 @@
                            [(:jobid @spindle) (atom :awaiting_response)])
                   :queue 
                      (conj (:queue @spindle) 
-                            [(:jobid @spindle) fun]))))
+                            [(:jobid @spindle) fun true]))))
+  @local_jobid))
+
+(defn weave_away! [spindle fun]
+  ^{:doc "For SIDE EFFECTS only!
+          Adds a function to be executed onto the spindle specified. You can 
+          call this function on any thread. Returns the jobid this work will be
+          done on, however no answer will be retrivable.
+          Should return very quickly"}
+   ;;TODO TESTs
+ (let [local_jobid (ref :notset)]
+    (dosync (ref-set local_jobid (:jobid @spindle))
+            (ref-set spindle 
+               (assoc @spindle 
+                  :jobid 
+                     (inc (:jobid @spindle))
+                  :queue 
+                     (conj (:queue @spindle) 
+                            [(:jobid @spindle) fun false]))))
   @local_jobid))
 
 
 (defn do_job- [job]
 ^{:doc "takes a job tuple and creates the done job tuple, executes the given
         function held in the job"}
-    [(first job) ((second job))])
+    [(first job) ((second job)) (nth job 2)])
 
 
 
@@ -82,8 +100,10 @@
       ;;look into it
    (if (= done_job :nothing_to_spin)
     :nothing_to_spin
-    (let [response_atom_to_update ((@spindle :response) (first done_job))]
-      (swap! response_atom_to_update (fn [_] (second done_job))))))
+     (if (nth done_job 2)
+       (let [response_atom_to_update ((@spindle :response) (first done_job))]
+         (swap! response_atom_to_update (fn [_] (second done_job))))
+       nil)))
 
 (defn spin! [spindle]
   "Works through one item of work that is queued on the spindle
@@ -193,7 +213,7 @@
            (while (= (@spindle :spinning?) true)
              (do 
                 (try (spin! spindle)
-                   (catch com.nativelibs4java.opencl.CLException$OutOfResources e (println "ERROR - your GPU is running out of ram")))
+                   (catch Exception e (println "ERROR - your GPU is probably running out of RAM")))
                 (if (= (peek (@spindle :queue)) nil) (Thread/sleep 1))))))
          :stoped_spindle)))
    :spindle_aready_spinning_somewhere)))
@@ -271,6 +291,39 @@ __kernel void foopp(
 (time (spin_dump! foo_spindle))
 (stop_spindle! foo_spindle)
 
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;s
+(def  foo_spindle3 (make_spindle))
+(weave_away! foo_spindle3 (fn [] (def openclarray (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
+(weave_away! foo_spindle3 (fn [] (def openclarray2     (wrap [(float 15.0) (float 16.0) (float 170.0) (float 18.0)] :float32))))
+
+(time (loop [k 10000]
+     (if  (= k 0)
+        :done
+        (do 
+
+;(start_openCL_spindle! foo_spindle3 pp_openCL)
+
+           (do
+;(weave_on! foo_spindle3 (fn [] (def openclarray (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
+;(weave_on! foo_spindle3 (fn [] (def openclarray2     (wrap [(float 15.0) (float 16.0) (float 170.0) (float 18.0)] :float32))))
+(weave_away! foo_spindle3 (fn [] (enqueue-kernel :foopp 4 openclarray2 openclarray  )))
+(weave_away! foo_spindle3 (fn [] (enqueue-kernel :foopp 4 openclarray openclarray2  )))
+(defn readout_float_buffer [whichbuffer start_read_at end_read_at]
+    (let [buffer_data (^floats float-array (deref (enqueue-read whichbuffer [start_read_at end_read_at])))]
+     (enqueue-barrier)(finish)
+     (let [clj_arrayout (map  (fn [x] (nth buffer_data x))(range 0 (- end_read_at start_read_at)))]
+     clj_arrayout)))
+;(println (weave! foo_spindle3 (fn [] (readout_float_buffer openclarray 0 4))))
+)
+;(time (spool_off_dump! foo_spindle3))
+;(time (spin_dump! foo_spindle3))
+;(stop_spindle! foo_spindle3)
+
+            (recur (dec k))))))
+(println (weave! foo_spindle3 (fn [] (readout_float_buffer openclarray 0 4))))
 )
 
 

@@ -34,12 +34,13 @@ This is the old values that was here....
    )
 
 (deftest test_spin_once!
-   (is (= (spin_once! test_spindle) [0 46]))
-   (is (= (spin_once! test_spindle) [1 48]))
+   (is (= (spin_once! test_spindle) [0 46 true]))
+   (is (= (spin_once! test_spindle) [1 48 true]))
    )
 
 (deftest test_spool_on!
-   (is (= (spool_on! test_spindle [0 "some done work"])) "some done work")
+   (is (= (spool_on! test_spindle [0 "some done work" true])) "some done work")
+   (is (= (spool_on! test_spindle [0 "some done work" false])) "some done work")
    )
 
 (deftest test_spin!
