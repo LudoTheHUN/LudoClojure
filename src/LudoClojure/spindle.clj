@@ -62,16 +62,24 @@
     (dosync 
        (ref-set local_job (peek (@spindle :queue)))
        (if (= nil @local_job)
-         
          :nothing_to_spin
          (ref-set spindle (assoc @spindle :queue (pop (:queue @spindle))))))
     (if @local_job
        (do_job- @local_job)
        :nothing_to_spin)))
 
+(defn spin_dump! [spindle]
+   "dumps all data in the spindle queue"
+   ;TODO write tests
+    (dosync
+       (ref-set spindle (assoc 
+                          @spindle :queue 
+                          clojure.lang.PersistentQueue/EMPTY))))
 
 (defn spool_on! [spindle done_job]
     "Puts the spup once work onto the spindle responce map of jobid:atoms"
+    ;;TODO a NullPointerException is somehow possible somewhere here, 
+      ;;look into it
    (if (= done_job :nothing_to_spin)
     :nothing_to_spin
     (let [response_atom_to_update ((@spindle :response) (first done_job))]
@@ -94,7 +102,7 @@
    Does not guarantee that if two threads reading off a jobid from a spindle at
      the very same time with end with exactly only one having the answer"
   ;;TODO maybe, put everything in dosync so that one amswer is guaranteed to be 
-  ;;retived once??
+  ;;retived once?? Bad for performance / locking characterystics
     (let [response 
                 (try @((:response @spindle) jobid) 
                    (catch java.lang.NullPointerException e :response_missing))
@@ -106,21 +114,26 @@
                                :response (dissoc (:response @spindle) jobid)))))
       response))
 
+(defn spool_off_dump! [spindle]
+     "clears out all uncollected responses, they are lost to the ether"
+  (dosync 
+    (let [ids_to_dump  (keys (:response @spindle))]
+      (ref-set spindle (assoc @spindle  :response 
+                          (reduce dissoc (:response @spindle) ids_to_dump))))))
 
-;;WIP!!
+
 (defn weave_off! [spindle jobid]
   "trys to spool_off! results from spindle untill retry attempts run out
    gives up if result is :response_missing"
+         ;;TODO write Doc
+         ;;TODO write tests
    (let  [weave_off_retries (@spindle :weave_off_retries)
           weave_off_ms_wait (@spindle :weave_off_ms_wait)]
     (loop [k weave_off_retries]
-         ;;TODO write Doc
-         ;;TODO write tests
-         ;;TODO replace this with an interupt on the function's calling thread object?? nahhh
-         ;;make retries and sleep time a keyvale pair within the spindle
-         ;TODO add functionality to test the spindle is spinning somewhere..., this is a property of the spindle
       (let [response (spool_off! spindle jobid )]
-           (if (or (not (= response :awaiting_response)) (= response :response_missing)(= k 0))
+           (if (or (not (= response :awaiting_response)) 
+                   (= response :response_missing)
+                   (= k 0))
                (if 
                    (= k 0)
                    :response_timeout
@@ -138,24 +151,59 @@
 ;;;;OK to here....
 
 
-(comment
-;;;;MOC!!
-  
-(defn make_spinner [queue_name]
+(defn start_spindle! [spindle]
+  "Sets the spindle spinning status to true and start to read off the queue,
+   calling spin! on it. " 
   ;;TODO Add a check to ensure the queue is not already running
   ;;TODO Add a decomission mechanisim
-  (fn [] 
+  ;TODO write tests
+ (let [ok_to_start_spindle (ref :donno)]
+    (dosync
+           (if (= (@spindle :spinning?) false)
+               (do (ref-set spindle (assoc @spindle :spinning? true))
+                   (ref-set ok_to_start_spindle :yes))
+               (ref-set ok_to_start_spindle :no)
+                  ))
+   (if (= @ok_to_start_spindle :yes)
        (.start (Thread. (fn []
-;(with-cl (with-program (compile-program pp_openCL)
- ;;Put on loop
-         (while true
-     ;(println "on step:" k)
-     ;just have this loop for ever while running
-           (do (spin! spindle))
-     ;TODO have a status i nthe quenue object!
-           (Thread/sleep 1)))))))
-)
- 
+         (while (= (@spindle :spinning?) true)
+            (do (spin! spindle)
+                (if (= (peek (@spindle :queue)) nil) (Thread/sleep 1))))
+         :stoped_spindle)))
+   :spindle_aready_spinning_somewhere)))
+
+(defn start_openCL_spindle! [spindle openCL_source]
+  "Sets the spindle spinning status to true and start to read off the queue,
+   calling spin! on it. " 
+  ;;TODO Add a check to ensure the queue is not already running
+  ;;TODO Add a decomission mechanisim
+  ;TODO write tests  !!!!!!
+  ;TODO write tests
+  ;TODO write tests
+ (let [ok_to_start_spindle (ref :donno)]
+    (dosync
+           (if (= (@spindle :spinning?) false)
+               (do (ref-set spindle (assoc @spindle :spinning? true))
+                   (ref-set ok_to_start_spindle :yes))
+               (ref-set ok_to_start_spindle :no)
+                  ))
+   (if (= @ok_to_start_spindle :yes)
+       (.start (Thread. (fn []
+         (with-cl (with-program (compile-program openCL_source)
+           (while (= (@spindle :spinning?) true)
+             (do 
+                (try (spin! spindle)
+                   (catch com.nativelibs4java.opencl.CLException$OutOfResources e (println "ERROR - your GPU is running out of ram")))
+                (if (= (peek (@spindle :queue)) nil) (Thread/sleep 1))))))
+         :stoped_spindle)))
+   :spindle_aready_spinning_somewhere)))
+
+
+(defn stop_spindle! [spindle]
+  ;TODO write more tests
+     (dosync (ref-set spindle (assoc @spindle :spinning? false)))
+     :spindle_stopped)
+
 
 
 (comment
@@ -173,8 +221,56 @@
 (spin! foo_spindle)
 (spool_off! foo_spindle 2)
 
-(weave_off! foo_spindle 1)
+(weave_off! foo_spindle 6)
 (weave_off! foo_spindle 3)
+
+(start_spindle! foo_spindle)
+(stop_spindle! foo_spindle)
+
+(time (weave! foo_spindle #(+ 10)))
+(peek (@foo_spindle :queue))
+
+(time (loop [k 100]
+     (if  (= k 0)
+        :done
+        (do (weave! foo_spindle #(+ 10))
+            (recur (dec k))))))
+
+(spool_off_dump! foo_spindle)
+
+
+
+(def pp_openCL
+  "
+__kernel void foopp(
+    __global float *liquidState1_a,
+    __global float *liquidState1_b
+    )
+{
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+    liquidState1_b[gid] = liquidState1_a[gid] + 1.01;
+}
+  ")
+(start_openCL_spindle! foo_spindle pp_openCL)
+
+(time (do
+(weave! foo_spindle (fn [] (def openclarray (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
+(weave! foo_spindle (fn [] (def openclarray2     (wrap [(float 15.0) (float 16.0) (float 170.0) (float 18.0)] :float32))))
+(weave! foo_spindle (fn [] (enqueue-kernel :foopp 4 openclarray2 openclarray  )))
+(weave! foo_spindle (fn [] (enqueue-kernel :foopp 4 openclarray openclarray2  )))
+(defn readout_float_buffer [whichbuffer start_read_at end_read_at]
+    (let [buffer_data (^floats float-array (deref (enqueue-read whichbuffer [start_read_at end_read_at])))]
+     (enqueue-barrier)(finish)
+     (let [clj_arrayout (map  (fn [x] (nth buffer_data x))(range 0 (- end_read_at start_read_at)))]
+     clj_arrayout)))
+(weave! foo_spindle (fn [] (readout_float_buffer openclarray 0 4)))
+))
+
+(time (spool_off_dump! foo_spindle))
+(time (spin_dump! foo_spindle))
+(stop_spindle! foo_spindle)
+
 )
 
 

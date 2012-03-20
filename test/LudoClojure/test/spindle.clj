@@ -3,6 +3,8 @@
   (:use [clojure.test])
   )
 
+(use 'calx)
+
 (comment
 This is the old values that was here....
 (deftest replace-me ;; FIXME: write
@@ -75,6 +77,9 @@ This is the old values that was here....
 
 (deftest test_weave!
     (is (= (weave! test_spindle (fn [] (+ 4 6))) :response_timeout))
+    (is (= (start_spindle! test_spindle) nil))
+    (is (= (weave! test_spindle (fn [] (+ 4 7))) 11))
+    (is (= (stop_spindle! test_spindle) :spindle_stopped))
     ;;Note: can not get a responce if the spindle is not spinning
     )
 
