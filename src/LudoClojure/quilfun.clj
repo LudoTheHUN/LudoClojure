@@ -266,16 +266,55 @@
 ; (def quil_liquid (make_liquid {:liquidsize (* 500) :connections 3}))   ;;interesting
 (def quil_liquid (make_liquid {:liquidsize (* 64 64 2) :connections 100}))   ;;interesting
 (def quil_connections 110)
-(def quil_connections 102)
+;(def quil_connections 102)
+
+(def pp_for_liquid (make_pp {:input_size 20
+                   :outputs_size 5
+                   :pp_size 5
+                   :rho 2               ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
+                   :eta (float 0.001)    ;;  learning_rate
+                   :gama (float 0.1)    ;;  margin around zero              ;0.4
+                   :epsilon (float 0.1) ;;  level of error that is allowed.
+                   :mu (float 0.2 )}))
+
+
+;;make liquid state input to pp
+(def train? false)
+(def train? true)
+(def countdown_to_train (atom 20))
+
+(defn train_pp_delayed []
+
+ (if (= @countdown_to_train 0)
+   (swap! countdown_to_train (fn[x] 120)))
+ (swap! countdown_to_train dec)
+ 
+ (if (= @countdown_to_train 60) 
+   (inject quil_liquid (vec (repeat (* 64 7) 10.0))))
+
+ (if (and (< @countdown_to_train 60 ) train?)
+ (pp_train pp_for_liquid (map (fn [x] (/ (- x 5) 5)) (readoff_speced quil_liquid [512 (+ 512 100)]))  [ 1.0  1.0  1.0  1.0  1.0])
+ (pp_train pp_for_liquid (map (fn [x] (/ (- x 5) 5)) (readoff_speced quil_liquid [512 (+ 512 100)]))  [-1.0 -1.0 -1.0 -1.0 -1.0]))
+ 
+ (let [trained_pp_answer (pp_answer pp_for_liquid  (map (fn [x] (/ (- x 5) 5)) (readoff_speced quil_liquid [512 (+ 512 200)])))]
+       (do (stroke 0 220 0)
+           (line (+ @xpoint 20)      (+ 100 (* 50 (first trained_pp_answer)))
+                 (+ @xpoint 20)      (+ 100 (* 50 (first trained_pp_answer)))  )))
+)
+;;(train_pp_delayed)
+
+
 
 ;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 3}))   ;;interesting
 ;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 200}))   ;;interesting
 ;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 0}))   ;;interesting
 
-(readoff_speced quil_liquid [6 5])
+(readoff_speced quil_liquid [6 7])
 ;;  (inject quil_liquid (vec (repeat (* 64 6) 10.0)))
 ;;  (inject quil_liquid (vec (repeat (* 64 32) 0.0)))
 ;;  (inject quil_liquid (vec (repeat (* 64) 10.0)))
+
+
 
 (defn draw_liquid [] 
    (do 
@@ -330,12 +369,16 @@
    (update_xpoint!)
    ;(draw_xpoints)
    ;(write_out_text)
-   (draw_pp_vec_points pp0)
+   ;(draw_pp_vec_points pp0)
+  (draw_pp_vec_points pp_for_liquid)
    (mouse_control_atom_x gama)
 
 
    ;;liquid drawing
    (draw_liquid)
+   
+   (train_pp_delayed)
+   (writoutstuff (str (pp_readout pp_for_liquid :pp_answer_buf))  0 (- (height) 100) 150 10)
    
    (writoutstuff (str "@frmecounter " @frmecounter)      0 0  150 10)
    (writoutstuff (str "@xpoint" @xpoint)                 0 10 150 10)

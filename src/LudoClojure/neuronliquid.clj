@@ -9,8 +9,9 @@
 (v_delta [neuron])
 (u_delta [neuron])
 (flop [neuron])
+(pprt [neuron])
   )
-  
+
 (extend-type NeuronliquidRecord NeuronliquidProtocol
   
 (v_delta [n]
@@ -27,24 +28,28 @@
        b (:b n)]
   (* a (- (* b v) u))))
 
-(flop [n]
+(flop [n] ;;TODO make a let here
   (if (> (:v n) 30.0)
       (conj n {:v (:c n) :u (+ (:u n) (:d n))})
-      (conj n {:v (v_delta n) :u (u_delta n)})))
+      (conj n {:v (+ (:v n) (v_delta n)) :u (+ (:u n) (u_delta n))})))
+
+(pprt [n]
+  (str "v:" (format "%.2f" (float(:v n))) " u:" (format "%.2f" (float (:u n)))))
 
 )
 
 
 
+(quote
 (defprotocol NeuronsliquidProtocol  ;Protocol for a collection of neurons
 (v_delta [neurons])
 (u_delta [neurons])
 (flop [neurons])
   )
+)
 
 
-
-(def n (NeuronliquidRecord. 1.0 1.0 1.0 0.02 0.2 -50 2.0))
+(def n (NeuronliquidRecord. 1.0 1.0 10.00 0.02 0.2 -50 2.0))
 
 (v_delta n)
 (u_delta n)
@@ -59,19 +64,43 @@
     n
     (recur (flop n) (- repeats 1)))))
 
-(time (run_times n 10001))
+(time (run_times n 10000))
 
 
-(def nmap (vec (repeat 10000 n)))
+(def nmap (repeat 1000 n))  ;;1k neurons
 
-(defn p_run_times [nmap repeats]
+
+(defn p_run_times_fast [nmap repeats]
  (loop [nmap nmap repeats repeats] 
   (if (= repeats 0)
-    nmap
-    (recur (vec (map flop nmap)) (- repeats 1)))))
-
-(time (doall (p_run_times nmap 20) (println :done)))
+         nmap
+         (recur (map flop nmap) (- repeats 1)))))
 
 
+(time 
+  (let [simed (p_run_times_fast nmap 1000)]
+  (time (doall (println (pprt(last simed))) (println :done)))))
+(time (count (p_run_times_fast nmap 1000)))
+
+(time (def bigrun (p_run_times_faster nmap 1000)))   ;floped 1k times
+(class bigrun)
+
+
+
+(time (first bigrun))
+(time (nth bigrun 500))
+(time (nth bigrun 998))
+(time (first nmap))
+(time (count bigrun))
+
+;;TODO how to implement connectivity efficently between n's, we need to set thier i value...
+;;TODO make this happen on many agent, use clojure parelisim strengths ...
+
+(pprt n)
+(def a (map pprt nmap))
+
+
+;; (println n)
+;; (pprt n)
 ;; 2m neuron updates a second, no synapses!
 

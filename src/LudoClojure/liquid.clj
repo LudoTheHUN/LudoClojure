@@ -226,7 +226,7 @@ debug_infobuff[gid]= gid_to_read;
    (let [{:keys [liquid_opencl_env liquid_queue liquidsize eta connections] 
                  :or 
                 {liquid_opencl_env cl-utils/opencl_env
-                 liquid_queue :queue   ;;TODO  Make this similart to pp, add qeueu to opencl_env dynamically
+                 liquid_queue :queue   ;;TODO  Make this similart to pp, add qeueu to opencl_env dynamically ... or just make everything run on the default queue
                  liquidsize 64
                  eta (float 0.001)
                  connections 5
@@ -268,17 +268,15 @@ debug_infobuff[gid]= gid_to_read;
 (quote
   
 (def myliquid (make_liquid {:liquidsize (* 10) :connections 13}))
-
 @(lg_enqueue-read (:liquidState1_b_buf myliquid) ((:liquid_queue myliquid) @(:liquid_opencl_env myliquid)))
-
 
 @(lg_enqueue-read (:liquidState1_a_buf myliquid) ((:liquid_queue myliquid) @(:liquid_opencl_env myliquid)))
 (inject myliquid  [45 34 23])
 @(lg_enqueue-read (:liquidState1_a_buf myliquid) ((:liquid_queue myliquid) @(:liquid_opencl_env myliquid)))
 
-
+(readoff myliquid)
+(flop myliquid)
 )
-
 
 ;;Note
 ;;buffers 'a' are from t-1. buffers 'b' are t bufferrs (those that need to be computed now)
@@ -287,7 +285,6 @@ debug_infobuff[gid]= gid_to_read;
 ;;   (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
 
 (quote 
-
 
 (def sourceOpenCL
   "
