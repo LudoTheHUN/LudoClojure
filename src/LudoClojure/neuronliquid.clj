@@ -7,9 +7,11 @@
 
 (defprotocol NeuronliquidProtocol
 (v_delta [neuron])
+(v_delta_with_i [neuron i])
 (u_delta [neuron])
 (i_delta [neuron i])
 (flop [neuron])
+(flop_with_i [n i])
 
 (pprt [neuron])
 
@@ -21,6 +23,11 @@
  (let [v (:v n)
        u (:u n)
        i (:i n)]
+  (- (+ (* 0.04 v v) (* 5 v) 140 i) u)))
+
+(v_delta_with_i [n i]
+ (let [v (:v n)
+       u (:u n)]
   (- (+ (* 0.04 v v) (* 5 v) 140 i) u)))
 
 
@@ -39,6 +46,11 @@
       (conj n {:v (:c n) :u (+ (:u n) (:d n))})
       (conj n {:v (+ (:v n) (v_delta n)) :u (+ (:u n) (u_delta n))})))
 
+(flop_with_i [n i] ;;TODO make a let here
+  (if (> (:v n) 30.0)
+      (conj n {:v (:c n) :u (+ (:u n) (:d n))})
+      (conj n {:v (+ (:v n) (v_delta_with_i n i)) :u (+ (:u n) (u_delta n))})))
+
 (pprt [n]
   (str "v:" (format "%.2f" (float(:v n))) " u:" (format "%.2f" (float (:u n)))))
 
@@ -52,9 +64,49 @@
 (class (rand 1))
 
 
-(defrecord NeuronliquidEnsamble [ns cones size])  ;array of NeuronliquidRecord. , connectivity between them, size of ensamble
+(defrecord NeuronliquidEnsamble [neurs      ;array of NeuronliquidRecord.
+                                 cones   ;array of connectivity specs between ns, by array positon
+                                 size])  ;array of NeuronliquidRecord. , connectivity between them, size of ensamble
+
+(defprotocol NeuronliquidEnsambleProtocol
+  (compute_i_vec [ensamble])
+  (ensamble_flop [ensamble])
+  )
+
+(extend-type NeuronliquidEnsamble NeuronliquidEnsambleProtocol
+ (compute_i_vec [ensamble]
+    (let [cones (:cones ensamble)
+          nuros (:neurs ensamble)]
+    (pmap 
+      (fn [cone]
+        (reduce (fn [xs x] 
+                    (+ (* (:v (nth nuros (first x))) 
+                          (second x))
+                   xs)) 0.0  cone)
+        )
+      cones)
+     )
+    )
+
+ (ensamble_flop [ensamble]
+  (let [new_i_vec (compute_i_vec ensamble)        ]
+    (update-in ensamble [:neurs] 
+               (fn [neurs] (vec (map flop_with_i neurs new_i_vec))))
+    ))
+)
+  
 
 
+  
+
+(quote ;;DROP old implementation
+  (ensamble_flop [ensamble]
+  (let [new_i_vec (compute_i_vec ensamble)
+        neurs (:neurs ensamble)]
+    (conj ensamble {:neurs
+         (vec (map flop_with_i neurs new_i_vec))
+            })
+    )))
 
 
 ;;TODO create a model for i (the input signal to be updateble based on other neurons
@@ -68,47 +120,109 @@
                (fn [x] [(long (.nextInt r  size)) (.nextDouble r )]) 
                (range 0 connections))))))
 
+(mk_cone 10 2 0)
+
 
   ;;each connection 
 
 (defn mkNeuronliquidEnsamble [size connections] 
-   (NeuronliquidEnsamble. (vec (repeat size n))  (map (fn [seed] (mk_cone size connections seed)) (range size)) size))
+   (NeuronliquidEnsamble. (vec (repeat size n))  
+                          (map (fn [seed] (mk_cone size connections seed)) (range size)) 
+                          size))
 
-(time (def anNeuronliquidEnsamble (mkNeuronliquidEnsamble 1000 50)))
+
+
+(time (def anNeuronliquidEnsamble (mkNeuronliquidEnsamble 100 10)))
+
+(* 100000 10 (/ 1000.0 350 ) 10)
+(* 100 10 (/ 1000.0 5 ) 10)
+
+
+(class (:neurs anNeuronliquidEnsamble))
 
 (defn new_i_for_each_n [anNeuronliquidEnsamble]
+  "takes NeuronliquidEnsamble and returns array of new i's for each  "
   (let [cones (:cones anNeuronliquidEnsamble)
-        cone (nth (:cones anNeuronliquidEnsamble) 0)
-        nuros (:ns anNeuronliquidEnsamble)
+        nuros (:neurs anNeuronliquidEnsamble)
         ]
-    
     (pmap 
       (fn [cone]
         (reduce (fn [xs x] 
-               (+ (* (:v (nth nuros (first x))) 
-                     (second x))
-                  xs)) 0.0  cone)
+                    (+ 
+                      (* (:v (nth nuros (first x)))
+                         (second x))
+                      xs)) 0.0  cone)
         )
       cones)
      )
   )
 
 
-(new_i_for_each_n anNeuronliquidEnsamble)
+(time (def somenew_is (new_i_for_each_n anNeuronliquidEnsamble)))
+(take 20 somenew_is)
 
-(defn do_ensamble_updates []
-(time (def d (conj anNeuronliquidEnsamble
-  {:ns (vec 
-         (map (fn [x y] (conj y {:i x}))
+(defn do_ensamble_updates [anNeuronliquidEnsamble]
+ (conj anNeuronliquidEnsamble
+  {:neurs 
+         (vec (map (fn [x y] (conj y {:i x}))
             (new_i_for_each_n anNeuronliquidEnsamble)
-            (:ns anNeuronliquidEnsamble)))})))
+            (:neurs anNeuronliquidEnsamble)))}))
+
+
+
+
+
+(defn do_ensamble_flop [anNeuronliquidEnsamble]
+(let [new_is (new_i_for_each_n anNeuronliquidEnsamble)]
+ (conj anNeuronliquidEnsamble
+  {:neurs 
+       (vec (map flop_with_i (:neurs anNeuronliquidEnsamble) new_is))
+            })))
+
+(time (last (:neurs  
+          (do_ensamble_flop anNeuronliquidEnsamble))))
+
+(time (last (:neurs  
+          (ensamble_flop anNeuronliquidEnsamble))))
+
+
+(quote (time (last (:neurs (do_ensamble_flop (do_ensamble_flop anNeuronliquidEnsamble))))))
+
+(class (:neurs (do_ensamble_flop (do_ensamble_flop anNeuronliquidEnsamble))))
+
+(quote
+(time (last (:neurs  
+          (-> anNeuronliquidEnsamble 
+             do_ensamble_flop 
+             do_ensamble_flop 
+             do_ensamble_flop 
+             do_ensamble_flop 
+             do_ensamble_flop
+             do_ensamble_flop
+             do_ensamble_flop
+             do_ensamble_flop
+             do_ensamble_flop
+             do_ensamble_flop
+             ))))
+
+(time (last (:neurs  
+          (-> anNeuronliquidEnsamble 
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop
+             ensamble_flop))))
 )
 
-(take 10 (:ns d))
-
-(time (do_ensamble_updates))
 
 
+(class (:neurs (time (do_ensamble_updates anNeuronliquidEnsamble))))
+(take 4 (:neurs (time (do_ensamble_updates anNeuronliquidEnsamble))))
 
 (reduce (fn [xs x] (conj xs x)) [] [1 2 3])
 (conj [1 2 3] 4)
@@ -169,14 +283,14 @@
 (time (first bigrun))
 (time (nth bigrun 500))
 (time (nth bigrun 998))
-(time (first nmap))
+;(time (first nmap))
 (time (count bigrun))
 
 ;;TODO how to implement connectivity efficently between n's, we need to set thier i value...
 ;;TODO make this happen on many agent, use clojure parelisim strengths ...
 
 (pprt n)
-(def a (map pprt nmap))
+;(def a (map pprt nmap))
 
 
 ;; (println n)
