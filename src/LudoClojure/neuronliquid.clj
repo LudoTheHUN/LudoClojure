@@ -8,8 +8,11 @@
 (defprotocol NeuronliquidProtocol
 (v_delta [neuron])
 (u_delta [neuron])
+(i_delta [neuron i])
 (flop [neuron])
+
 (pprt [neuron])
+
   )
 
 (extend-type NeuronliquidRecord NeuronliquidProtocol
@@ -28,6 +31,9 @@
        b (:b n)]
   (* a (- (* b v) u))))
 
+(i_delta [n i]
+ (conj n {:i i}))
+
 (flop [n] ;;TODO make a let here
   (if (> (:v n) 30.0)
       (conj n {:v (:c n) :u (+ (:u n) (:d n))})
@@ -40,16 +46,77 @@
 
 
 
-(quote
-(defprotocol NeuronsliquidProtocol  ;Protocol for a collection of neurons
-(v_delta [neurons])
-(u_delta [neurons])
-(flop [neurons])
+(def n (NeuronliquidRecord. 1.0 1.0 10.00 0.02 0.2 -50 2.0))
+
+(class (:v n))
+(class (rand 1))
+
+
+(defrecord NeuronliquidEnsamble [ns cones size])  ;array of NeuronliquidRecord. , connectivity between them, size of ensamble
+
+
+
+
+;;TODO create a model for i (the input signal to be updateble based on other neurons
+;;TODO have the input into i be based of an array? or references to the other neurons
+
+(time (defn mk_cone [size connections seed]
+  "each connection is an vec of vec of pointer and strength
+   DONE TODO make it deterministic via a seed"
+    (let [r (java.util.Random. seed)]   ;0 here is the seed
+        (vec (map 
+               (fn [x] [(long (.nextInt r  size)) (.nextDouble r )]) 
+               (range 0 connections))))))
+
+
+  ;;each connection 
+
+(defn mkNeuronliquidEnsamble [size connections] 
+   (NeuronliquidEnsamble. (vec (repeat size n))  (map (fn [seed] (mk_cone size connections seed)) (range size)) size))
+
+(time (def anNeuronliquidEnsamble (mkNeuronliquidEnsamble 1000 50)))
+
+(defn new_i_for_each_n [anNeuronliquidEnsamble]
+  (let [cones (:cones anNeuronliquidEnsamble)
+        cone (nth (:cones anNeuronliquidEnsamble) 0)
+        nuros (:ns anNeuronliquidEnsamble)
+        ]
+    
+    (pmap 
+      (fn [cone]
+        (reduce (fn [xs x] 
+               (+ (* (:v (nth nuros (first x))) 
+                     (second x))
+                  xs)) 0.0  cone)
+        )
+      cones)
+     )
   )
+
+
+(new_i_for_each_n anNeuronliquidEnsamble)
+
+(defn do_ensamble_updates []
+(time (def d (conj anNeuronliquidEnsamble
+  {:ns (vec 
+         (map (fn [x y] (conj y {:i x}))
+            (new_i_for_each_n anNeuronliquidEnsamble)
+            (:ns anNeuronliquidEnsamble)))})))
 )
 
+(take 10 (:ns d))
 
-(def n (NeuronliquidRecord. 1.0 1.0 10.00 0.02 0.2 -50 2.0))
+(time (do_ensamble_updates))
+
+
+
+(reduce (fn [xs x] (conj xs x)) [] [1 2 3])
+(conj [1 2 3] 4)
+
+
+  ;(i_delta n i)
+
+  
 
 (v_delta n)
 (u_delta n)
@@ -64,11 +131,18 @@
     n
     (recur (flop n) (- repeats 1)))))
 
-(time (run_times n 10000))
+(time (run_times n 100000))
 
 
-(def nmap (repeat 1000 n))  ;;1k neurons
+(time (def nmap_sizescaling0  (repeat 10000 n)))
+(time (def nmap_sizescaling1  (vec nmap_sizescaling0)))
 
+(time (def nmap_sizescaling (vec (repeat 10000 n))))  ;;1k neurons
+(class nmap_sizescaling)
+(time (nth nmap_sizescaling 9999))
+(time (count nmap_sizescaling))
+(time (last nmap_sizescaling))
+(time (first nmap_sizescaling))
 
 (defn p_run_times_fast [nmap repeats]
  (loop [nmap nmap repeats repeats] 
@@ -78,12 +152,17 @@
 
 
 (time 
-  (let [simed (p_run_times_fast nmap 1000)]
+  (let [simed (p_run_times_fast nmap_sizescaling 100)]
+  (println (class simed))
   (time (doall (println (pprt(last simed))) (println :done)))))
-(time (count (p_run_times_fast nmap 1000)))
+;(time (count (p_run_times_fast nmap 1000)))
 
-(time (def bigrun (p_run_times_faster nmap 1000)))   ;floped 1k times
+
+(time (def bigrun (p_run_times_fast nmap_sizescaling 1000)))   ;floped 1k times
 (class bigrun)
+(nth bigrun 1000)
+
+
 
 
 
