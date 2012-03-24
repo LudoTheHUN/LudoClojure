@@ -1,7 +1,7 @@
-(ns ^{:doc "Spindle a spining reactor like construct for teleporting unevaluated 
+(ns ^{:doc "Spindle, reactor like construct for teleporting unevaluated 
       functions and their returns values between threads for use in siturations 
-      where the scope of a thread is expensive to bootstap eg: with calx with 
-      opencl scopes."
+      where the scope of a thread is expensive to bootstap eg: within calx and 
+      with opencl scopes."
       :author "LudoTheHUN"}
    LudoClojure.spindle)
 
@@ -9,9 +9,10 @@
 
 
 (defn make_spindle 
-  ^{:doc "Creates a spindle. Holds id that will be assigned to the next task, 
+^{:doc "Creates a spindle. Holds jobid that will be assigned to the next task, 
           a set of uncollected responses (return values of functions)
-          and a queue of tasks that are waiting to be carries out"}
+          and a queue of tasks that are waiting to be carries out. Also holds 
+          some status information and options"}
    ([] (make_spindle 1000 1))
    ([weave_off_retries weave_off_ms_wait] 
    (ref {:jobid 0 
@@ -21,12 +22,10 @@
          :weave_off_retries weave_off_retries
          :weave_off_ms_wait weave_off_ms_wait})))
 
-
-
 ;(def a_spindle (make_spindle))
 
 (defn weave_on! [spindle fun]
-  ^{:doc "Adds a function to be executed onto the spindle specified. You can 
+^{:doc "Adds a function to be executed onto the spindle specified. You can 
           call this function on any thread. Returns the jobid linking this call 
           with the eventual answer. Adds an entry onto response: awaiting answer
           Should return very quickly"}
@@ -45,12 +44,14 @@
   @local_jobid))
 
 (defn weave_away! [spindle fun]
-  ^{:doc "For SIDE EFFECTS only!
+^{:doc "For SIDE EFFECTS only!
           Adds a function to be executed onto the spindle specified. You can 
           call this function on any thread. Returns the jobid this work will be
-          done on, however no answer will be retrivable.
-          Should return very quickly"}
-   ;;TODO TESTs
+          done on, however no answer will be retrivable from the responses map
+          Should return very quickly. Side effects will be performed by the
+          spinning thread, or jobid order (only if there is just one spining
+          thread)"}
+;;TODO TESTs
  (let [local_jobid (ref :notset)]
     (dosync (ref-set local_jobid (:jobid @spindle))
             (ref-set spindle 
@@ -75,7 +76,6 @@
         No retries are possible.
         The spinning should be done on the target thread which has the expensive
         openCL context."}
-  ;;;BUG  -- does not return the evaluated work, just :nothing_to_spin
  (let [local_job (ref :notset)]
     (dosync 
        (ref-set local_job (peek (@spindle :queue)))
@@ -87,16 +87,16 @@
        :nothing_to_spin)))
 
 (defn spin_dump! [spindle]
-   "dumps all data in the spindle queue"
-   ;TODO write tests
+^{:doc "dumps all data in the spindle queue"}
     (dosync
        (ref-set spindle (assoc 
                           @spindle :queue 
                           clojure.lang.PersistentQueue/EMPTY))))
 
 (defn spool_on! [spindle done_job]
-    "Puts the spup once work onto the spindle responce map of jobid:atoms"
-    ;;TODO a NullPointerException is somehow possible somewhere here, 
+^{:doc "puts the response of the done function, the done_job, onto the spindle
+        response map of jobid:atoms"}
+;;;TODO a bug:NullPointerException is somehow possible somewhere here, 
       ;;look into it
    (if (= done_job :nothing_to_spin)
     :nothing_to_spin
@@ -106,8 +106,9 @@
        nil)))
 
 (defn spin! [spindle]
-  "Works through one item of work that is queued on the spindle
-   Should be run on the expensive openCL thread"
+^{:doc "Spins the spindle. Gets the result of given function executed and
+        spools on the result back on.
+        This should be run o threads that have expensive to spool up contexts"}
   (let [spun_result (spin_once! spindle)]
     (if (= spun_result :nothing_to_spin)
         :nothing_to_spin
@@ -115,14 +116,17 @@
 
 
 (defn spool_off! [spindle jobid]
-  "Returns a responce for a jobid, 
-   if the response is found, removes the job response from spindle response map.
-   If response is still :awaiting_response, returns :awaiting_response
-   if there is no response, returns :response_missing
-   Does not guarantee that if two threads reading off a jobid from a spindle at
-     the very same time with end with exactly only one having the answer"
-  ;;TODO maybe, put everything in dosync so that one amswer is guaranteed to be 
-  ;;retived once?? Bad for performance / locking characterystics
+^{:doc "Returns the responce for a jobid that has been previouslty spooled on.
+        if the response is found, removes the job response from spindle response 
+        map.
+        If response is still :awaiting_response, returns :awaiting_response.
+        If there is no response, returns :response_missing.
+        Does not guarantee that if two threads reading off a jobid from a 
+        spindle at the very same time end up with exactly only one having the
+        answer delived.
+"}
+;;TODO maybe, put everything in dosync so that one amswer is guaranteed to be 
+;;retived once?? Bad for performance / locking characterystics
     (let [response 
                 (try @((:response @spindle) jobid) 
                    (catch java.lang.NullPointerException e :response_missing))
@@ -135,7 +139,7 @@
       response))
 
 (defn spool_off_dump! [spindle]
-     "clears out all uncollected responses, they are lost to the ether"
+^{:doc "clears out all uncollected responses"}
   (dosync 
     (let [ids_to_dump  (keys (:response @spindle))]
       (ref-set spindle (assoc @spindle  :response 
@@ -143,10 +147,9 @@
 
 
 (defn weave_off! [spindle jobid]
-  "trys to spool_off! results from spindle untill retry attempts run out
-   gives up if result is :response_missing"
-         ;;TODO write Doc
-         ;;TODO write tests
+^{:doc "Returns with the return values of the function called on a jobid
+        trys to spool_off! results from spindle untill retry attempts run out
+        gives up if result is :response_missing"}
    (let  [weave_off_retries (@spindle :weave_off_retries)
           weave_off_ms_wait (@spindle :weave_off_ms_wait)]
     (loop [k weave_off_retries]
@@ -162,21 +165,64 @@
 
 
 (defn weave! [spindle fun]
-  "Returns the response of the provided function via the spindle round trip"
-  ;;TODO write doc
-  ;;TODO write more tests!!
+^{:doc "The main function for spindle, weaves the function on and weaves the
+        result back , returning it. Assumes spindle is spinning.
+        Returns the response of the provided function via the spindle round 
+        trip"}
+;;TODO write more tests!!
   (let [jobid (weave_on! spindle fun)]   ; assuming the queue is running
     (weave_off! spindle jobid)))
 
-;;;;OK to here....
 
+
+
+(defn stop_spindle! [spindle]
+^{:doc "Stops a spinnig sindle by setting it's spinning? flag. Any correclty
+        implemented spindle will complete it current jobid and exit out of the
+        worker thread."}
+;TODO write more tests
+     (dosync (ref-set spindle (assoc @spindle :spinning? false)))
+     :spindle_stopping)
+
+
+(defn safe_spin! [spindle]
+^{:doc "spins the spindle in a trycatch, catching all errors."}
+;;TODO need to test behaviour = safety of emediate restart.
+ (spin! spindle)
+(comment
+   (try (spin! spindle)
+    (catch Exception e 
+              (do 
+                 (println "ERROR - spin! failed, stopping spindle")
+                 (stop_spindle! spindle)
+                 :spindle_errored)))))
+
+(defn start_spindle_thread! [spindle]
+^{:doc "Starts the thread that will do the spindling. Does so depending on 
+        if there is openCL source attached to the spindle. Will compile and
+        run within that context if there is openCL source"}
+  (if (not (= (type(@spindle :openCLsource)) java.lang.String))
+      (.start (Thread. (fn []
+         (while (= (@spindle :spinning?) true)
+            (do (safe_spin! spindle)
+                (if (= (peek (@spindle :queue)) nil) (Thread/sleep 1))))
+         :stoped_spindle)))
+      (.start (Thread. (fn []
+        (with-cl (with-program (compile-program (@spindle :openCLsource))
+           (while (= (@spindle :spinning?) true)
+             (do (safe_spin! spindle)
+                 (if (= (peek (@spindle :queue)) nil) (Thread/sleep 1))))))
+        :stoped_spindle)))))
+
+
+ ;;; Make OpenCLness part of spindle? keep spource on spindle, plus openCL vs not too?
 
 (defn start_spindle! [spindle]
   "Sets the spindle spinning status to true and start to read off the queue,
    calling spin! on it. " 
   ;;TODO Add a check to ensure the queue is not already running
   ;;TODO Add a decomission mechanisim
-  ;TODO write tests
+  ;TODO write tests!!
  (let [ok_to_start_spindle (ref :donno)]
     (dosync
            (if (= (@spindle :spinning?) false)
@@ -185,14 +231,32 @@
                (ref-set ok_to_start_spindle :no)
                   ))
    (if (= @ok_to_start_spindle :yes)
-       (.start (Thread. (fn []
-         (while (= (@spindle :spinning?) true)
-            (do (spin! spindle)
-                (if (= (peek (@spindle :queue)) nil) (Thread/sleep 1))))
-         :stoped_spindle)))
-   :spindle_aready_spinning_somewhere)))
+       (start_spindle_thread! spindle)
+       :spindle_aready_spinning_somewhere)))
 
-(defn start_openCL_spindle! [spindle openCL_source]
+
+ ;;; Make OpenCLness part of spindle? keep spource on spindle, plus openCL vs not too?
+(defn spindle_add_openCLsource! [spindle openCLsource]
+  "Ads openCL source to the spindle.When spindle is started, it will do so in
+   the with-cl scope."
+;;TODO tests!!
+  (dosync 
+      (ref-set spindle (assoc @spindle :openCLsource openCLsource)))
+  :added_openCL)
+      
+;;;;OK to here....
+
+
+
+
+
+;;;;;;;;  END OF SPINDLE CODE;;;;;;;;  END OF SPINDLE CODE
+;;;;;;;;  END OF SPINDLE CODE;;;;;;;;  END OF SPINDLE CODE
+;;;;;;;;  END OF SPINDLE CODE;;;;;;;;  END OF SPINDLE CODE
+
+(comment
+  
+(defn NOW_REDUNDANTstart_openCL_spindle! [spindle openCL_source]
   "Sets the spindle spinning status to true and start to read off the queue,
    calling spin! on it. " 
   ;;TODO Add a check to ensure the queue is not already running
@@ -207,26 +271,22 @@
                    (ref-set ok_to_start_spindle :yes))
                (ref-set ok_to_start_spindle :no)
                   ))
-   (if (= @ok_to_start_spindle :yes)
+   (if (and (= @ok_to_start_spindle :yes) @spindle)
        (.start (Thread. (fn []
          (with-cl (with-program (compile-program openCL_source)
            (while (= (@spindle :spinning?) true)
              (do 
                 (try (spin! spindle)
-                   (catch Exception e (println "ERROR - your GPU is probably running out of RAM")))
+                   (catch Exception e 
+                     (do 
+                     (println "ERROR - spin! failed, stopping spindle")
+                     (stop_spindle! spindle)
+                     )))
                 (if (= (peek (@spindle :queue)) nil) (Thread/sleep 1))))))
-         :stoped_spindle)))
-   :spindle_aready_spinning_somewhere)))
-
-
-(defn stop_spindle! [spindle]
-  ;TODO write more tests
-     (dosync (ref-set spindle (assoc @spindle :spinning? false)))
-     :spindle_stopped)
-
-
-
-(comment
+         :spindle_stopped)))
+   :not_ok_to_start_spindle)))
+  
+  
 (def  foo_spindle (make_spindle))
 (weave_on! foo_spindle #(+ 3 6))
 
@@ -296,6 +356,27 @@ __kernel void foopp(
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;s
 (def  foo_spindle3 (make_spindle))
+
+(start_openCL_spindle! foo_spindle3 pp_openCL)
+
+(def pp_openCL
+  "
+__kernel void foopp(
+    __global float *liquidState1_a,
+    __global float *liquidState1_b
+    )
+{
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+    liquidState1_b[gid] = liquidState1_a[gid] + 1.01;
+}
+  ")
+
+(defn readout_float_buffer [whichbuffer start_read_at end_read_at]
+    (let [buffer_data (^floats float-array (deref (enqueue-read whichbuffer [start_read_at end_read_at])))]
+     (enqueue-barrier)(finish)
+     (let [clj_arrayout (map  (fn [x] (nth buffer_data x))(range 0 (- end_read_at start_read_at)))]
+     clj_arrayout)))
 (weave_away! foo_spindle3 (fn [] (def openclarray (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
 (weave_away! foo_spindle3 (fn [] (def openclarray2     (wrap [(float 15.0) (float 16.0) (float 170.0) (float 18.0)] :float32))))
 
@@ -333,8 +414,26 @@ __kernel void foopp(
        ;    (ref-set spindle (assoc @spindle 
        ;                            :response (conj (:response @spindle) done_job))))))
 
+;
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
 
 ;;;;;;;;;;;;;;;;OLD CODE BELOW THIS LINE ONLY;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
