@@ -117,8 +117,8 @@ This is the old values that was here....
 
 
 (deftest test_weave_openCL!
-   
-  (def test_spindle_CL (make_spindle 100 1))
+;Creating new spindle so that we can have it be openCL friendly from the start.
+  (def test_spindle_CL (make_spindle 1000 1))  
     (def pp_openCL
   "
 __kernel void foopp(
@@ -159,11 +159,10 @@ __kernel void foopp(
    )
 
 
-;;Test start stopping a spindle
-
 
 ;;This forces test to be done in sequence, which is needed here because of the 
 ;;statefull nature.
+
 (deftest test_spindle_steps
    (test_empty_spindle)
    (test_weave_on!)

@@ -8,89 +8,6 @@
 
 
 
-(comment mocs
-(defn make_pp [spindle size options]
-  
-  
-  
-)
-;;TODO   Need generic openCL-clojure functionality to move data about
-
-Deal with array types.... nail ints and floats.
-
-
-(time (with-cl 
-         (let [inarray [0.01 10.10 2.00001]
-               foo (wrap inarray :float32)]
-           @(enqueue-read foo ))))
-(time (with-cl
-         (let  [floatarray ;[0.01 10.10 2.00001]
-                          (vec (map float [0.01 10.10 2.00001]))
-                foo (wrap floatarray :float32)]
-           (println (type @(enqueue-read foo )))
-           (println (type floatarray))
-           (println (type (nth @(enqueue-read foo ) 0)))
-           (println (type (floatarray 0)))
-           (type 0.01)
-           (println (= (nth @(enqueue-read foo ) 0) (float 0.01)))
-           (println (= (nth @(enqueue-read foo ) 0) (nth floatarray 0)))
-           (= @(enqueue-read foo ) floatarray)
-           )))
-
-(type (float 1.3))
-(type 1.3)
-
-([1 23 4] 2)
-
-(time (with-cl 
-         (let [intfoo (wrap [10 9 8] :int32)]
-           @(enqueue-read intfoo )
-           (println (type @(enqueue-read intfoo )))
-           (println (type (nth @(enqueue-read intfoo) 0)))
-           (= @(enqueue-read intfoo) [10 9 8])
-           )))
-           
-           (= [1 2 3] [1 2 3])
-
-
-
-
-)
-
-
-(def pp_openCL
-  "
-__kernel void foopp(
-    __global float *liquidState1_a,
-    __global float *liquidState1_b
-    )
-{
-    int gid = get_global_id(0);
-    int gsize = get_global_size(0);
-    liquidState1_b[gid] = liquidState1_a[gid] + 1.01;
-}
-  ")
-
-
-
-(defn runpp []
-(def pp_spindle (make_spindle))
-(spindle_add_openCLsource! pp_spindle pp_openCL)
-(start_spindle! pp_spindle)
-(stop_spindle! pp_spindle)
-)
-
-(comment
-(runpp)
-)
-
-
-
-
-(comment
-  
-  
-  ;;OLD pperceptron code
 
 
 ;(use 'clojure.contrib.math)
@@ -625,4 +542,4 @@ __kernel void foopp(
 ;  {:a (+ foo 5)})
 ;(:a (funkymapfun 10))
 
-)
+

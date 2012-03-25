@@ -94,7 +94,7 @@
      ;TODO put openCL on a action listener dependet loop (events)	
 ;TODO recode GUI with ???  http://lifeofaprogrammergeek.blogspot.com/2009/05/model-view-controller-gui-in-clojure.html
 ;look at: http://kotka.de/blog/2010/03/proxy_gen-class_little_brother.html
-;Yup, I'm crazy too :-)  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
+;  http://stuartsierra.com/2010/01/05/taming-the-gridbaglayout
 
 
 ;(in-ns 'LudoClojure.timelooper1.timelooper1)
