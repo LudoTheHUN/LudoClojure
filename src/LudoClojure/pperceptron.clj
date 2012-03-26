@@ -2,27 +2,128 @@
   ;(:require calx)
   (:gen-class))
 
+
 (use 'calx)
 (use 'LudoClojure.spindle)
 
 
 
+(def pp_spindle (make_spindle 100000 0))
+
+    (def pp_openCL
+  "
+__kernel void foopp(
+    __global float *liquidState1_a,
+    __global float *liquidState1_b
+    )
+{
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+    liquidState1_b[gid] = liquidState1_a[gid] + 1.01;
+}
+  ")
+    
+    (def pp_openCL2
+  "
+__kernel void foopp2(
+    __global float *liquidState1_a,
+    __global float *liquidState1_b
+    )
+{
+    int gid = get_global_id(0);
+    int gsize = get_global_size(0);
+    liquidState1_b[gid] = liquidState1_a[gid] - 1.01;
+}
+  ")
+    
+
+(spindle_add_openCLsource! pp_spindle (str pp_openCL pp_openCL2) )
+
+(start_spindle! pp_spindle)
+
+(time (weave! pp_spindle #(let [inarray [0.01 10.10 2.00001]
+               foo (wrap inarray :float32)]
+           @(enqueue-read foo ))))
+
+(weave! pp_spindle #(wrap [0.01 14.10 2.00001] :float32))
+
+(weave! pp_spindle #(def foo (wrap [0.01 14.10 2.00001] :float32)))
+(weave! pp_spindle #(def baz (wrap [34.01 14.10 2.00001] :float32)))
+
+(defn make_buf [spindle arrayvals]
+   (weave! spindle #(wrap arrayvals :float32)))
+
+(def mybuf (make_buf pp_spindle [34.01 14.10 2.00001 98.2]))
+
+                
+
+(time (weave! pp_spindle #(+ 1 2)))
+(time (+ 1 2))
+(weave! pp_spindle (fn [] @(enqueue-read foo)))
+(weave! pp_spindle (fn [] @(enqueue-read baz)))
+
+(weave! pp_spindle #(enqueue-kernel :foopp 3 foo baz))
+(weave! pp_spindle (fn [] @(enqueue-read foo)))
+(weave! pp_spindle (fn [] @(enqueue-read baz)))
+
+
+(defn openCL_increment [spindle floatarray]
+  (let [calxbuffer (weave! spindle #(wrap floatarray :float32))]
+     (weave! spindle #(enqueue-kernel :foopp 3 calxbuffer calxbuffer))
+     (weave! spindle (fn [] @(enqueue-read calxbuffer)
+      calxbuffer))))
+
+(time (openCL_increment pp_spindle [12.01 11.10 2.00001]))
+
+(defn openCL_increment_persist [spindle buf1 buf2]
+      (weave! spindle #(enqueue-kernel :foopp 3 buf1 buf2))
+       buf2)
+
+(defn buf_read [spindle buf]
+    (weave! spindle (fn [] @(enqueue-read buf))))
+
+(buf_read pp_spindle (openCL_increment_persist pp_spindle foo foo))
+
+(buf_read pp_spindle (openCL_increment_persist pp_spindle mybuf mybuf))
+
+
+
+(time (loop [k 300]
+    (if 
+      (= k 0)
+          (buf_read pp_spindle (openCL_increment_persist pp_spindle mybuf mybuf))
+         (do (buf_read pp_spindle (openCL_increment_persist pp_spindle mybuf mybuf))
+             (recur (dec k))))))
+
 
 (comment mocs
 (defn make_pp [spindle size options]
   
-  
-  
+
+(stop_spindle! pp_spindle)
+
 )
 ;;TODO   Need generic openCL-clojure functionality to move data about
 
-Deal with array types.... nail ints and floats.
+;Deal with array types.... nail ints and floats.
+
+;center on buffers or the data they represent??? or the version of the double buffer thats important now?
+
+
+
 
 
 (time (with-cl 
          (let [inarray [0.01 10.10 2.00001]
                foo (wrap inarray :float32)]
            @(enqueue-read foo ))))
+
+(def foo (with-cl (wrap [0.01 10.10 2.00001] :float32)))
+  
+
+(with-cl queue)
+(with-cl context)
+
 (time (with-cl
          (let  [floatarray ;[0.01 10.10 2.00001]
                           (vec (map float [0.01 10.10 2.00001]))
@@ -36,6 +137,8 @@ Deal with array types.... nail ints and floats.
            (println (= (nth @(enqueue-read foo ) 0) (nth floatarray 0)))
            (= @(enqueue-read foo ) floatarray)
            )))
+
+(version)
 
 (type (float 1.3))
 (type 1.3)
