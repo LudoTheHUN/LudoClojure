@@ -2,14 +2,24 @@
   ;(:require calx)
   (:gen-class))
 
-
 (use 'calx)
 (use 'LudoClojure.spindle)
 
 
 
-(def pp_spindle (make_spindle 100000 0))
-
+   (def  openCL_copy_float_x_to_y
+  "
+__kernel void copyFloatXtoY(
+    __global float *x,
+    __global float *y
+    )
+{
+    int gid = get_global_id(0);
+    y[gid] = x[gid];
+}
+  ")
+    
+    
     (def pp_openCL
   "
 __kernel void foopp(
@@ -35,25 +45,203 @@ __kernel void foopp2(
     liquidState1_b[gid] = liquidState1_a[gid] - 1.01;
 }
   ")
-    
 
-(spindle_add_openCLsource! pp_spindle (str pp_openCL pp_openCL2) )
 
-(start_spindle! pp_spindle)
+
+;;<<<< Clean to here
+;;defs
+(def default_spindle (make_spindle 2000 1))
+
+
+(defn make_float_buf
+ ([float_array]
+   (make_float_buf default_spindle float_array))
+ ([spindle float_array]
+   (weave! spindle #(wrap float_array :float32))))
+
+
+;;empty bufs(weave! default_spindle #(create-buffer (* 64 64 64) :float32 ))
+
+
+(defn make_int_buf 
+ ([int_array]
+   (make_int_buf default_spindle int_array))
+ ([spindle int_array]
+   (weave! spindle #(wrap int_array :int32))))
+
+
+(defn read_buf
+ ([buf]
+    (read_buf default_spindle buf))
+ ([spindle buf]
+    (weave! spindle (fn [] @(enqueue-read buf)))))
+
+
+(defn make_random_float_array [size]
+  "returns a deterministic random float array vector"
+   (doall
+   (let [r (java.util.Random. 12345)]
+     (loop [i 0 outlist ()]
+       (if (= i size)
+         outlist
+         (recur (inc i) (conj outlist (float(* (.nextInt r 1000) 0.001)))))))))
+
+
+(defn buf_elements [buf]
+     (:elements buf))
+
+
+(defn copy_float_buf_to_buf [buf1 buf2]
+   (weave_away! default_spindle #(enqueue-kernel :copyFloatXtoY (buf_elements buf1) buf1 buf2)))
+
+
+(defn readin_to_buf [buf float_array]
+    (copy_float_buf_to_buf (make_float_buf float_array) buf))
+
+
+
+
+;---PP code
+
+(def training_set_XOR
+  ; "array of input output arrays, answers must be between -1 and 1"
+  ;[[inputs] [correctvalues]]   [[inputs] [correctvalues] [answers]]
+   [[[1 0] [1]]
+    [[1 1] [-1]]
+    [[0 1] [1]]
+    [[0 0] [-1]]])
+
+(defn make_problem_options [problem]
+    {:examples (count problem)
+     :input_sizes  (count (first problem))
+     })
+
+(make_problem_options training_set_XOR)
+
+(def test_internal_options  {:hidensize 5
+                             :learning_rate 0.05
+                             :zero_margin 0.05
+                             :zero_margin_learning_rate 1.0
+                             })
+
+
+(defn init_pp [problem_options pp_internal_options]
+  ;;returns a pp represented as map to bufs on givien spindle and pp method functions
+  ;[[inputs] [correctvalues]]   [[inputs] [correctvalues] [answers]]
+   {:input_to_hiden_weights (make_float_buf (make_random_float_array 
+                                              (* (:input_sizes problem_options)
+                                                 (+ 1 (:hidensize pp_internal_options)))))
+
+    })
+
+
+
+;;empty bufs (read_buf (weave! default_spindle #(create-buffer (* 4) :float32 )))
+
+
+;;-----DoingStuff
+;--Setup
+(spindle_add_openCLsource! default_spindle (str pp_openCL pp_openCL2 openCL_copy_float_x_to_y))
+(start_spindle! default_spindle)
+(spin_dump! default_spindle)
+;;(stop_spindle! default_spindle)
+
+
+(def test_pp (init_pp (make_problem_options training_set_XOR) test_internal_options))
+(read_buf (:input_to_hiden_weights test_pp))
+
+
+
+
+;defs
+(def float_array (map float [1.1 1.2 1.3 1.123456789]))
+(def int_array [1 2 3 4 5])
+(def test_float_buf (make_float_buf float_array))
+(time (def test_int_buf (make_int_buf int_array)))
+(time (def random_float_array (make_random_float_array 100)))
+(time (def test_random_float_buf (make_float_buf random_float_array)))
+
+
+;reads
+(read_buf test_int_buf)
+
+(read_buf test_float_buf)
+(read_buf test_random_float_buf)
+;(read_buf random_float_array) ;;  !! trying to read an array with a buffer function!! break spindle
+(time (def comback_test_random_float_array (read_buf test_random_float_buf)))
+
+(time (copy_float_buf_to_buf test_float_buf test_random_float_buf))
+(comment
+(time (loop [k 7000]
+    (if 
+      (= k 0)
+          (time(read_buf test_random_float_buf))
+          ;:done
+          (do (copy_float_buf_to_buf test_float_buf test_random_float_buf)
+             (recur (dec k))))))
+)
+
+(readin_to_buf test_float_buf [23.2 12.1])
+
+(comment
+;(weave! spindle #(enqueue-kernel kernel 3 args1))
+(spin_kernel default_spindle :foopp 1 2)
+(weave! default_spindle #(enqueue-kernel :foopp 3 test_float_buf test_float_buf))
+(read_buf test_float_buf)
+)
+
+;tests
+(= float_array (read_buf test_float_buf))
+(time (= int_array (read_buf test_int_buf)))
+(time (= comback_test_random_float_array (read_buf test_random_float_buf)))
+
+
+
+
+
+
+;;-----DoingStuff DONE
+
+
+
+
+(comment mocs
+
+
+
 
 (time (weave! pp_spindle #(let [inarray [0.01 10.10 2.00001]
                foo (wrap inarray :float32)]
            @(enqueue-read foo ))))
-
 (weave! pp_spindle #(wrap [0.01 14.10 2.00001] :float32))
-
 (weave! pp_spindle #(def foo (wrap [0.01 14.10 2.00001] :float32)))
 (weave! pp_spindle #(def baz (wrap [34.01 14.10 2.00001] :float32)))
+
 
 (defn make_buf [spindle arrayvals]
    (weave! spindle #(wrap arrayvals :float32)))
 
+
+
+
+
+(def test_float_buf (make_float_buf pp_spindle [0.1 0.2 0.3]))
+(def test_int_buf (make_int_buf pp_spindle [0.1 0.2 0.3]))
+
+
+
+
+;;TODO make buf_int
+;;TODO make buf_float
+
 (def mybuf (make_buf pp_spindle [34.01 14.10 2.00001 98.2]))
+
+(defn buf_elements [buf]
+     (:elements buf))
+
+(buf_elements mybuf)
+
+
 
                 
 
@@ -96,7 +284,7 @@ __kernel void foopp2(
              (recur (dec k))))))
 
 
-(comment mocs
+
 (defn make_pp [spindle size options]
   
 
