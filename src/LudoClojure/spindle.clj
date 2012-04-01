@@ -13,14 +13,15 @@
           a set of uncollected responses (return values of functions)
           and a queue of tasks that are waiting to be carries out. Also holds 
           some status information and options"}
-   ([] (make_spindle 1000 1))
-   ([weave_off_retries weave_off_ms_wait] 
+   ([] (make_spindle 1000 1 :default))
+   ([weave_off_retries weave_off_ms_wait spindle_name] 
    (ref {:jobid 0 
          :response {}
          :queue clojure.lang.PersistentQueue/EMPTY
          :spinning? false
          :weave_off_retries weave_off_retries
-         :weave_off_ms_wait weave_off_ms_wait})))
+         :weave_off_ms_wait weave_off_ms_wait
+         :spindle_name spindle_name})))
 
 ;(def a_spindle (make_spindle))
 
@@ -68,7 +69,8 @@
 ^{:doc "takes a job tuple and creates the done job tuple, executes the given
         function held in the job"}
     [(first job) ((second job)) (nth job 2)])
-
+;;TODO put another try catch here around ((second job)) to prevent locking up sindles.
+;;TODO write tests for bad fuctions being passed in...
 
 
 (defn spin_once! [spindle]

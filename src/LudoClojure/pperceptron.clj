@@ -18,8 +18,8 @@ __kernel void copyFloatXtoY(
     y[gid] = x[gid];
 }
   ")
-    
-    
+
+
     (def pp_openCL
   "
 __kernel void foopp(
@@ -50,7 +50,7 @@ __kernel void foopp2(
 
 ;;<<<< Clean to here
 ;;defs
-(def default_spindle (make_spindle 2000 1))
+(def default_spindle (make_spindle 2000 1 :default_spindle))
 
 
 (defn make_float_buf
@@ -91,14 +91,43 @@ __kernel void foopp2(
      (:elements buf))
 
 
+
+(comment 
+ ;; first blood with macros
+(weave_kernel :foo 1 2 3 4) 
+(reduce + '(1 2 3 4))
+(defmacro dbg[x] `(let [x# ~x] (println '~x "=" x#) x#))
+(defn pythag [ x y ] (* (* x x) (* y y)))
+(defn pythag [ x y ]  (dbg (* (dbg (* x x)) (dbg (* y y)))))
+(pythag 4 5)
+(defmacro weave_kernel [spindle & args]
+        `(+ ~@args))
+(macroexpand '(weave_kernel :foo 12 234 32 23 23  2 23))
+(macroexpand-1 '(weave_kernel :foo 12 234 32 23 23  2 23)))
+
+
+(defmacro weave_kernel! [spindle kernel_keyword globalsize & bufs]
+       `(weave_away! ~spindle #(enqueue-kernel ~kernel_keyword ~globalsize ~@bufs)))
+
+
+(defn copy_float_buf_to_buf2 [buf1 buf2]
+   (weave_kernel! default_spindle :copyFloatXtoY (buf_elements buf1) buf1 buf2))
+
 (defn copy_float_buf_to_buf [buf1 buf2]
    (weave_away! default_spindle #(enqueue-kernel :copyFloatXtoY (buf_elements buf1) buf1 buf2)))
+;;TODO how to make the spindle go away from the set of parameters without shooting oneself in the foot longterm?
 
+(defn is_spindle? [spindle]
+   (:spindle_name @spindle))
+
+(time (is_spindle? default_spindle))
 
 (defn readin_to_buf [buf float_array]
+  ;TODO replace this with float and int versions
     (copy_float_buf_to_buf (make_float_buf float_array) buf))
 
-
+(defn readin_to_float_buf [buf float_array]
+    (copy_float_buf_to_buf (make_float_buf float_array) buf))
 
 
 ;---PP code
@@ -106,14 +135,17 @@ __kernel void foopp2(
 (def training_set_XOR
   ; "array of input output arrays, answers must be between -1 and 1"
   ;[[inputs] [correctvalues]]   [[inputs] [correctvalues] [answers]]
-   [[[1 0] [1]]
-    [[1 1] [-1]]
-    [[0 1] [1]]
-    [[0 0] [-1]]])
+   [
+    {:in [1 0] :out [1]}
+    {:in [1 1] :out [-1]}
+    {:in [0 1] :out [1]}
+    {:in [0 0] :out [-1]}
+    ])
 
 (defn make_problem_options [problem]
     {:examples (count problem)
-     :input_sizes  (count (first problem))
+     :input_size  (count (:in (first problem)))
+     :output_size  (count (:out (first problem)))
      })
 
 (make_problem_options training_set_XOR)
@@ -125,14 +157,24 @@ __kernel void foopp2(
                              })
 
 
-(defn init_pp [problem_options pp_internal_options]
-  ;;returns a pp represented as map to bufs on givien spindle and pp method functions
-  ;[[inputs] [correctvalues]]   [[inputs] [correctvalues] [answers]]
-   {:input_to_hiden_weights (make_float_buf (make_random_float_array 
-                                              (* (:input_sizes problem_options)
-                                                 (+ 1 (:hidensize pp_internal_options)))))
 
+(defn pp_make [spindle problem_options pp_internal_options]
+  ;;returns a pp represented as map to bufs on givien spindle and pp method functions
+
+   {:spindle spindle    ;;The spindle this pp will spin on.
+    :input_to_hiden_weights (make_float_buf (make_random_float_array 
+                                              (* (:input_size problem_options)
+                                                 (:output_size problem_options)
+                                                 (+ 1 (:hidensize pp_internal_options)))))
+;;TODO create all other bugs relavant to a pp here
     })
+
+;;TODO create support functions that take a pp, lookinto it for relavant bufs, and mutate state on the spindle ref held in the pp
+;;TODO put purely openCL funs to a seperate module, have them all take spindle as first parameter
+
+;;Test it in tests file...
+
+
 
 
 
@@ -146,8 +188,7 @@ __kernel void foopp2(
 (spin_dump! default_spindle)
 ;;(stop_spindle! default_spindle)
 
-
-(def test_pp (init_pp (make_problem_options training_set_XOR) test_internal_options))
+(def test_pp (pp_make default_spindle (make_problem_options training_set_XOR) test_internal_options))
 (read_buf (:input_to_hiden_weights test_pp))
 
 
@@ -171,6 +212,7 @@ __kernel void foopp2(
 (time (def comback_test_random_float_array (read_buf test_random_float_buf)))
 
 (time (copy_float_buf_to_buf test_float_buf test_random_float_buf))
+;(time (copy_float_buf_to_buf test_random_float_buf test_float_buf ))
 (comment
 (time (loop [k 7000]
     (if 
@@ -179,9 +221,20 @@ __kernel void foopp2(
           ;:done
           (do (copy_float_buf_to_buf test_float_buf test_random_float_buf)
              (recur (dec k))))))
+
+(time (is_spindle? default_spindle))
+
+(time (loop [k 100]
+    (if 
+      (= k 0)
+          ;(time(read_buf test_random_float_buf))
+          :done
+          (do (is_spindle? default_spindle)
+             (recur (dec k))))))
+
 )
 
-(readin_to_buf test_float_buf [23.2 12.1])
+(readin_to_buf test_float_buf [2.2 12.1])
 
 (comment
 ;(weave! spindle #(enqueue-kernel kernel 3 args1))
@@ -205,8 +258,17 @@ __kernel void foopp2(
 
 
 
+
+
+
+
+
+
+
+
 (comment mocs
 
+         ;Old stuff that will end up in scratch
 
 
 
