@@ -70,7 +70,7 @@
         function held in the job"}
     [(first job) ((second job)) (nth job 2)])
 ;;TODO put another try catch here around ((second job)) to prevent locking up sindles.
-;;TODO write tests for bad fuctions being passed in...
+;;TODO write tests for bad fuctions being passed in... that show spindle is robust.
 
 
 (defn spin_once! [spindle]
