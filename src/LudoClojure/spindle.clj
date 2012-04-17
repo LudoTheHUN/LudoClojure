@@ -14,6 +14,8 @@
           and a queue of tasks that are waiting to be carries out. Also holds 
           some status information and options"}
    ([] (make_spindle 1000 1 :default))
+   ([weave_off_retries weave_off_ms_wait] 
+      (make_spindle weave_off_retries weave_off_ms_wait :default))
    ([weave_off_retries weave_off_ms_wait spindle_name] 
    (ref {:jobid 0 
          :response {}
