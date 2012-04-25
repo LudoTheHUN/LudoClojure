@@ -90,7 +90,7 @@ __kernel void foopp2(
 (defn buf_elements [buf]
      (:elements buf))
 
-
+;;TODO make empty buf
 
 (comment 
  ;; first blood with macros
@@ -107,6 +107,7 @@ __kernel void foopp2(
 
 
 (defmacro weave_kernel! [spindle kernel_keyword globalsize & bufs]
+  "Side effects only, weaves away the buffer on the given spindle"
        `(weave_away! ~spindle #(enqueue-kernel ~kernel_keyword ~globalsize ~@bufs)))
 
 
@@ -116,7 +117,9 @@ __kernel void foopp2(
 (defn copy_float_buf_to_buf [buf1 buf2]
    (weave_away! default_spindle #(enqueue-kernel :copyFloatXtoY (buf_elements buf1) buf1 buf2)))
 ;;TODO how to make the spindle go away from the set of parameters without shooting oneself in the foot longterm?
+;;TODO Keep passin the spindle in everywhere
 
+;;TODO make this part of spindle
 (defn is_spindle? [spindle]
    (:spindle_name @spindle))
 
@@ -162,12 +165,13 @@ __kernel void foopp2(
   ;;returns a pp represented as map to bufs on givien spindle and pp method functions
 
    {:spindle spindle    ;;The spindle this pp will spin on.
-    :input_to_hiden_weights (make_float_buf (make_random_float_array 
-                                              (* (:input_size problem_options)
-                                                 (:output_size problem_options)
-                                                 (+ 1 (:hidensize pp_internal_options)))))
+    :input_to_hiden_weights (make_float_buf spindle (make_random_float_array 
+                                                     (* (:input_size problem_options)
+                                                        (:output_size problem_options)
+                                                        (+ 1 (:hidensize pp_internal_options)))))
 ;;TODO create all other bugs relavant to a pp here
     })
+
 
 ;;TODO create support functions that take a pp, lookinto it for relavant bufs, and mutate state on the spindle ref held in the pp
 ;;TODO put purely openCL funs to a seperate module, have them all take spindle as first parameter
