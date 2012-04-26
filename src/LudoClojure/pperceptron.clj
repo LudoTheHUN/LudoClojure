@@ -46,6 +46,93 @@ __kernel void foopp2(
 }
   ")
 
+(def pp_openCL (str pp_openCL pp_openCL2 openCL_copy_float_x_to_y))
+;;Note is the set of kernels to be openCL compiles keeps growing we may hit openCls limit 
+;;To build up the set of kernels across projects eg: pp and lsm, create a kernels entity which will concat the strigs just before passing to spindle
+;;so something like:
+
+
+(def opencl_kernels (atom
+ ;Array of kernel names to their specs   ;;;this will have to be in core??? the clj files just ram into here?..then they don't compose....
+    {}))
+
+;;simple  just compose each clj's  kernels just before passing into spindle
+;(conj @kernels @kernels @kernels)
+
+(defn add_kernel_specs [kernels_map kernel_specsmap]
+   (swap! kernels_map (fn [kernels_map] (conj kernels_map kernel_specsmap))))
+
+;;To add a kernel then do:
+(add_kernel_specs opencl_kernels
+{
+"newkernel" {:desc "testaddedkernel"
+             :postion 3
+             :body "
+__kernel void testaddedkernel(
+    __global float *x,
+    __global float *y
+    )
+{
+    int gid = get_global_id(0);
+    y[gid] = x[gid] - 1.0;
+}
+"}})
+
+(add_kernel_specs opencl_kernels
+{
+"copyFloatXtoY" {
+     :desc "copies one float array to another"
+     :postion 1
+     :body "
+__kernel void copyFloatXtoY(
+    __global float *x,
+    __global float *y
+    )
+{
+    int gid = get_global_id(0);
+    y[gid] = x[gid];
+}
+  "
+}
+"foo1" {
+     :desc "takes float x and puts x+1 into y"
+     :postion 2
+     :body "
+__kernel void foo1(
+    __global float *x,
+    __global float *y
+    )
+{
+    int gid = get_global_id(0);
+    y[gid] = x[gid] + 1.0;
+}
+"
+}
+})
+
+(defn get_openCL_from_kernels [a_kernels_map]
+  (reduce str 
+      (map :body 
+         (sort-by :postion 
+            (vals @a_kernels_map)))))
+
+(get_openCL_from_kernels opencl_kernels)
+
+;;TODO question, will this work well across clj files?
+
+(quote
+(keys @kernels)
+(keys @kernels)
+(keys @kernels)
+(:body (@kernels "newkernel"))
+(map :body (vals @kernels))
+(sort < [1 1 2])
+(reduce str (map :body (sort-by :postion (vals @kernels))))
+;;Does the order of submited kernels matter,it does, what then with support functions that get used within
+(map :body (vals @kernels))
+(concat (map :body (vals @kernels)))
+(str (dorun (map :body (vals @kernels))))
+(str (doall (map (fn [x] (:body x)) (@kernels "newkernel")))))
 
 
 ;;<<<< Clean to here
@@ -60,8 +147,17 @@ __kernel void foopp2(
    (weave! spindle #(wrap float_array :float32))))
 
 
-;;empty bufs(weave! default_spindle #(create-buffer (* 64 64 64) :float32 ))
+;;empty bufs (weave! default_spindle #(create-buffer (* 64 64 64) :float32 ))
 
+(quote ;This will catastrophically fail a spindle
+
+(defn forceFailSpindle [spindle number_of_elements]
+    (weave! spindle (fn [] create-buffer number_of_elements :float32)))
+
+)
+
+(defn make_empty_float_buf [spindle number_of_elements]
+    (weave! spindle (fn [] (create-buffer number_of_elements :float32))))
 
 (defn make_int_buf 
  ([int_array]
@@ -119,9 +215,7 @@ __kernel void foopp2(
 ;;TODO how to make the spindle go away from the set of parameters without shooting oneself in the foot longterm?
 ;;TODO Keep passin the spindle in everywhere
 
-;;TODO make this part of spindle
-(defn is_spindle? [spindle]
-   (:spindle_name @spindle))
+
 
 (time (is_spindle? default_spindle))
 
@@ -184,10 +278,11 @@ __kernel void foopp2(
 
 ;;empty bufs (read_buf (weave! default_spindle #(create-buffer (* 4) :float32 )))
 
-
-;;-----DoingStuff
+;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff
+;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff
+;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff;;-----DoingStuff
 ;--Setup
-(spindle_add_openCLsource! default_spindle (str pp_openCL pp_openCL2 openCL_copy_float_x_to_y))
+(spindle_add_openCLsource! default_spindle (str pp_openCL))
 (start_spindle! default_spindle)
 (spin_dump! default_spindle)
 ;;(stop_spindle! default_spindle)
@@ -196,7 +291,29 @@ __kernel void foopp2(
 (read_buf (:input_to_hiden_weights test_pp))
 
 
+(def test_empty_buf2 (make_empty_float_buf default_spindle 12))
+(read_buf test_empty_buf2)
+(readin_to_buf test_empty_buf2 [2.2 12.99 3.3])
+(read_buf test_empty_buf2)
 
+
+(def test_empty_buf5 (make_empty_float_buf default_spindle 12))
+(read_buf test_empty_buf5)
+(readin_to_buf test_empty_buf5 [1.0 2.0 3.0])
+(read_buf test_empty_buf5)
+(def test_empty_buf6 (make_empty_float_buf default_spindle 12))
+(read_buf test_empty_buf6)
+(def test_empty_buf7 (make_empty_float_buf default_spindle 13))
+(read_buf test_empty_buf7)
+(def test_empty_buf8 (make_empty_float_buf default_spindle 14))
+(read_buf test_empty_buf8)
+(def test_empty_buf9 (make_empty_float_buf default_spindle 12))
+(read_buf test_empty_buf9)
+(readin_to_buf test_empty_buf9 [1.0 2.0 3.999])
+(def test_empty_buf10 (make_empty_float_buf default_spindle 3))
+(read_buf test_empty_buf10)
+(readin_to_buf test_empty_buf10 [1.0 2.0 3.999 4.6])
+(read_buf test_empty_buf10)
 
 ;defs
 (def float_array (map float [1.1 1.2 1.3 1.123456789]))
@@ -207,10 +324,16 @@ __kernel void foopp2(
 (time (def test_random_float_buf (make_float_buf random_float_array)))
 
 
+
+
 ;reads
 (read_buf test_int_buf)
 
 (read_buf test_float_buf)
+(def test_float_buf2 (make_float_buf [10.1 20.1 30.1])) 
+(read_buf test_float_buf)
+(read_buf test_float_buf2)
+
 (read_buf test_random_float_buf)
 ;(read_buf random_float_array) ;;  !! trying to read an array with a buffer function!! break spindle
 (time (def comback_test_random_float_array (read_buf test_random_float_buf)))
@@ -238,7 +361,7 @@ __kernel void foopp2(
 
 )
 
-(readin_to_buf test_float_buf [2.2 12.1])
+
 
 (comment
 ;(weave! spindle #(enqueue-kernel kernel 3 args1))
@@ -252,7 +375,7 @@ __kernel void foopp2(
 (time (= int_array (read_buf test_int_buf)))
 (time (= comback_test_random_float_array (read_buf test_random_float_buf)))
 
-
+(readin_to_buf test_float_buf [2.2 12.2])
 
 
 

@@ -70,7 +70,10 @@
 (defn do_job- [job]
 ^{:doc "takes a job tuple and creates the done job tuple, executes the given
         function held in the job"}
-    [(first job) ((second job)) (nth job 2)])
+    [(first job) 
+     (try ((second job))
+        (catch Exception e :error_in_spun_function))
+     (nth job 2)])
 ;;TODO put another try catch here around ((second job)) to prevent locking up sindles.
 ;;TODO write tests for bad fuctions being passed in... that show spindle is robust.
 
@@ -246,7 +249,9 @@
       (ref-set spindle (assoc @spindle :openCLsource openCLsource)))
   :added_openCL)
 
-
+(defn is_spindle? [spindle]
+;;TODO write test for this
+   (:spindle_name @spindle))
 
 
 
