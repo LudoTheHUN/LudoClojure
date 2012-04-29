@@ -1,6 +1,7 @@
 (ns LudoClojure.pperceptron
   ;(:require calx)
-  (:gen-class))
+  ;(:gen-class)
+  )
 
 (use 'calx)
 (use 'LudoClojure.spindle)
@@ -150,10 +151,10 @@ __kernel void foo1(
 ;;empty bufs (weave! default_spindle #(create-buffer (* 64 64 64) :float32 ))
 
 (quote ;This will catastrophically fail a spindle
-
 (defn forceFailSpindle [spindle number_of_elements]
-    (weave! spindle (fn [] create-buffer number_of_elements :float32)))
+    (weave! spindle #( (create-buffer number_of_elements :float32))))
 
+(forceFailSpindle default_spindle 10)
 )
 
 (defn make_empty_float_buf [spindle number_of_elements]
@@ -312,7 +313,7 @@ __kernel void foo1(
 (readin_to_buf test_empty_buf9 [1.0 2.0 3.999])
 (def test_empty_buf10 (make_empty_float_buf default_spindle 3))
 (read_buf test_empty_buf10)
-(readin_to_buf test_empty_buf10 [1.0 2.0 3.999 4.6])
+(readin_to_buf test_empty_buf10 [1.0 2.0 4.999 4.6])
 (read_buf test_empty_buf10)
 
 ;defs
