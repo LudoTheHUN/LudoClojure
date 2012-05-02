@@ -243,10 +243,16 @@
 
 (defn spindle_add_openCLsource! [spindle openCLsource]
 ^{:doc "Adds openCL source to the spindle. Must be done before spindle is 
-        started. Spindle must be stoped and started again for new source to take
-        effect."}
+        started, else spindle is restarted.
+        Spindle must be stoped and started again for new source to take
+        effect, which it does on it's own"}
   (dosync 
       (ref-set spindle (assoc @spindle :openCLsource openCLsource)))
+  (if (:spinning? spindle)
+        (do
+          (stop_spindle! spindle)
+          (start_spindle! spindle))
+        )
   :added_openCL)
 
 (defn is_spindle? [spindle]
