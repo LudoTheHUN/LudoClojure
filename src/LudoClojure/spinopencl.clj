@@ -3,7 +3,7 @@
   )
 (use 'calx)
 
-(println "hello from spin-opencl")
+;(println "hello from spin-opencl")
 
 (def opencl_kernels 
 ^{:doc "
@@ -33,7 +33,7 @@ kernels and loose guarantee of functionality."}
 (add_kernel_specs opencl_kernels
 ;initial sets of most basic kernels
 {
-:newkernel {
+:testaddedkernel {
      :desc "a long string about that the kernel does"
      :postion 3
      :body "
@@ -77,11 +77,11 @@ __kernel void copyIntXtoY(
 }
   "
 }
-:foo1 {
+:addOneToFloat {
      :desc "takes float x and puts x+1 into y"
      :postion 2
      :body "
-__kernel void foo1(
+__kernel void addOneToFloat(
     __global float *x,
     __global float *y
     )
@@ -95,6 +95,12 @@ __kernel void foo1(
 
 (defn valid_frame [frame]
   (or (= frame :float32) (= frame :int32)))
+
+
+
+(defn opencl_checkpoint [spindle]
+      (weave! spindle (fn [] (enqueue-barrier)(finish))))
+
 
 (defn make_buf [spindle float_array frame]
 ^{:doc "Makes a buffer that lives on a spindle 
@@ -122,12 +128,13 @@ focus is on :float32 and :int32 glos types only"}
 
 
 (defmacro weave_kernel! [spindle kernel_keyword globalsize & bufs]
-  "Side effects only, weaves away the buffer on the given spindle"
+^{:doc "Side effects only, weaves away the a kernel on the given spindle"}
    `(weave_away! ~spindle #(enqueue-kernel ~kernel_keyword ~globalsize ~@bufs)))
 
 
-(defn copy_buf_to_buf [spindle buf1 buf2]
-  (if (= (:frame buf1) (:frame buf2))
+(defn copy_buf_to_buf! [spindle buf1 buf2]
+  (if (and (= (:frame buf1) (:frame buf2))
+           (>= (buf_elements buf2) (buf_elements buf1)))
     (cond 
       (= (:frame buf1) :float32)
          (weave_kernel! spindle :copyFloatXtoY (buf_elements buf1) buf1 buf2)
@@ -135,8 +142,11 @@ focus is on :float32 and :int32 glos types only"}
          (weave_kernel! spindle :copyIntXtoY (buf_elements buf1) buf1 buf2)
       :else 
          :bad_frame__copy_buf_to_buf2)
-    :framesnotthesame_copy_buf_to_buf
+    :framesnotthesame_copy_buf_to_buf   ;;TODO consider an exeception instead
     ))
+
+
+
 
 
 ;TODO look at using defmulti + defmethod

@@ -69,10 +69,13 @@
 
 (defn do_job- [job]
 ^{:doc "takes a job tuple and creates the done job tuple, executes the given
-        function held in the job"}
+        function held in the job
+        The array is  jobid, function to call, bool if result should be kept for 
+        reading"}
     [(first job) 
      (try ((second job))
-        (catch Exception e :error_in_spun_function))
+        (catch Exception e (do (println "ERROR inner spindle call failed" (second job))
+                             :error_in_spun_function)))
      (nth job 2)])
 ;;TODO put another try catch here around ((second job)) to prevent locking up sindles.
 ;;TODO write tests for bad fuctions being passed in... that show spindle is robust.
@@ -260,6 +263,10 @@
    (:spindle_name @spindle))
 
 
+(defn sindle_joblag [spindle]
+   (let [s @spindle]
+     {:jobrequest (:jobid s) :jobtodonext (first (peek (s :queue)))}))
+    
 
 
 

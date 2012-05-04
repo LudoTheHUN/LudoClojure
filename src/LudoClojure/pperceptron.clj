@@ -1,15 +1,19 @@
 (ns LudoClojure.pperceptron
-  ;(:require calx)
-  ;(:gen-class)
+  (:use [LudoClojure.spindle])
+  (:use [LudoClojure.spinopencl])
   )
-
 (use 'calx)
-(use 'LudoClojure.spindle)
 
 
+;TODO define what we want
+;Implement it
 
-   (def  openCL_copy_float_x_to_y
-  "
+(add_kernel_specs opencl_kernels
+{
+"copyFloatXtoY" {
+     :desc "copies one float array to another"
+     :postion 1
+     :body "
 __kernel void copyFloatXtoY(
     __global float *x,
     __global float *y
@@ -18,34 +22,21 @@ __kernel void copyFloatXtoY(
     int gid = get_global_id(0);
     y[gid] = x[gid];
 }
-  ")
+  "
+}})
+
+(quote
+
+  dfsfsd ert e
+  
+  )
 
 
-    (def pp_openCL
-  "
-__kernel void foopp(
-    __global float *liquidState1_a,
-    __global float *liquidState1_b
-    )
-{
-    int gid = get_global_id(0);
-    int gsize = get_global_size(0);
-    liquidState1_b[gid] = liquidState1_a[gid] + 1.01;
-}
-  ")
-    
-    (def pp_openCL2
-  "
-__kernel void foopp2(
-    __global float *liquidState1_a,
-    __global float *liquidState1_b
-    )
-{
-    int gid = get_global_id(0);
-    int gsize = get_global_size(0);
-    liquidState1_b[gid] = liquidState1_a[gid] - 1.01;
-}
-  ")
+
+
+
+
+(quote
 
 (def pp_openCL (str pp_openCL pp_openCL2 openCL_copy_float_x_to_y))
 ;;Note is the set of kernels to be openCL compiles keeps growing we may hit openCls limit 
@@ -1105,5 +1096,8 @@ __kernel void foopp(
 ;(defn funkymapfun [foo]
 ;  {:a (+ foo 5)})
 ;(:a (funkymapfun 10))
+
+)
+
 
 )
