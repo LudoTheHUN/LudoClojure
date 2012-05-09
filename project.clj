@@ -3,8 +3,8 @@
   :dependencies [[org.clojure/clojure "1.2.1"]
                  [org.clojure/clojure-contrib "1.2.0"]
                  [calx/calx "0.2.1-SNAPSHOT"]
-                 [calx/javacl "1.0.4b"]
-                 [gloss "0.1.1-SNAPSHOT"]
+                ; [calx/javacl "1.0.4b"]
+                ; [gloss "0.1.1-SNAPSHOT"]
                  ]
   :dev-dependencies [
         [lein-eclipse "1.0.0"]

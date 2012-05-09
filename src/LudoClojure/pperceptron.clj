@@ -2,28 +2,264 @@
   (:use [LudoClojure.spindle])
   (:use [LudoClojure.spinopencl])
   )
-(use 'calx)
+;(use 'calx)
 
+(+ 1 2)
 
 ;TODO define what we want
 ;Implement it
 
+
+
+;; Naming convention
+;;   pps          is an array of perceptron (not being impelented in the early stage, but this is the target)
+;;   pp           is one paralel perceptron
+;;   perceptron   is one of the perceptrons within a pp
+;;   alpha        holds over all pps, each pp and each perceptron, the weight poiting to input data arrray
+
+
+
 (add_kernel_specs opencl_kernels
 {
-"copyFloatXtoY" {
-     :desc "copies one float array to another"
-     :postion 1
+:vecProduct {
+     :desc "computes a vector product of an *in sized array by *in time *out  
+vector, resultingin *out sized array, notes on approach here:
+http://www.bealto.com/gpu-gemv_v1.html"
+     :postion 10
      :body "
-__kernel void copyFloatXtoY(
-    __global float *x,
-    __global float *y
+__kernel void vecProduct(
+    const int input_size,
+    __global float *in,
+    __global float *alpha,
+    __global float *out
     )
 {
-    int gid = get_global_id(0);
-    y[gid] = x[gid];
+
+float total = 0.0;
+int gid = get_global_id(0);
+
+  for(int k=0; k<input_size; k++) {
+       total += alpha[gid * input_size + k] * in[k];
+  }
+out[gid] = total;
 }
+
   "
+}
+:reduceToPP {
+     :desc "reduces the perceptrons outputs to singular pp output"
+     :postion 10
+     :body "
+__kernel void reduceToPP(
+    const int pp_size,
+    __global float *vecProductResult,
+    __global float *pp_answer_buf
+    )
+{
+
+float total = 0.0;
+float binaryPPout = 0.0;
+
+int gid = get_global_id(0);
+
+  for(int k=0; k<pp_size; k++) {
+      
+     binaryPPout = vecProductResult[gid * pp_size + k];
+        if( binaryPPout > 0) {
+            total += 1.0; 
+           }
+        else {
+            total += -1.0;
+             }
+  }
+pp_answer_buf[gid] = total / pp_size;  //Different squashing functions could be implemente here, eg: binary 1,-1 
+}
+"
+}
+
+
+:updateAlphas {
+     :desc "updates the alphas based on how correct the previous pp was.   
+TODO: optimisation: mearge this kernel with that of vecProduct so that we don't have to read alphas twice and call two kernels "
+     :postion 10
+     :body "
+__kernel void updateAlphas(
+    const int input_size,
+    const float epsilon,
+    __global float *vecProductResult,
+    __global float *pp_answer_buf,
+    __global float *correct_answer_buf,
+    __global float *alpha
+    )
+{
+
+float total = 0.0;
+int gid = get_global_id(0);
+
+//compute the per perceptron values, ie: which direction is the perceptron wrong.
+  for(int k=0; k<input_size; k++) {
+     ///write to the alpha entry conditionally   alpha[gid * input_size + k] = WIP;
+  }
+}
+"
 }})
+
+
+(def pp_spindle (make_spindle 10000 1))
+;Load in openCL kernels
+(spindle_add_openCLsource! pp_spindle (get_openCL_from_kernels opencl_kernels))
+;Start the openCL spindle used in all subsequent tests
+(start_spindle! pp_spindle)
+
+
+
+;;Note, -1.0 at the end always needs to be there, this is the bias term.
+(def input_data_buf_atom  (atom (make_buf pp_spindle [1.0 0.0 -1.0] :float32)))
+
+
+(defn make_random_float_array [size booster seed]
+   (doall
+   (let [r (java.util.Random. seed)]
+     (loop [i 0 outlist []]
+       (if (= i size)
+         outlist
+         (recur (inc i) (conj outlist (+ (* (float (.nextInt r 100)) 0.01) booster) )))))))
+
+(make_random_float_array 5 -0.5 1)
+(make_random_float_array 6 -0.5 1)
+
+(def pp_size 5)
+(def input_size (buf_elements @input_data_buf_atom))
+(def size_of_alpha_needed (* input_size pp_size))
+
+(def alpha   (make_buf pp_spindle (make_random_float_array size_of_alpha_needed -0.5 1) :float32))
+
+
+(read_buf pp_spindle alpha)
+(read_buf pp_spindle @input_data_buf_atom)
+
+
+
+;;example  of swapping in a new buffer with new input data
+(swap! input_data_buf_atom (fn [_] (make_buf pp_spindle [1.0 1.0 -1.0] :float32)))
+(def first_pp_target_ouput
+[(+ 0.35 0.38 0.03) 
+ (+ -0.37 0.04 0.46)
+(+ -0.16 -0.44 -0.28)
+(+ -0.02 0.19 -0.23)
+(+ -0.33 0.13 -0.12)])
+
+(def vecProductResult (make_empty_buf pp_spindle pp_size :float32))
+(read_buf pp_spindle vecProductResult)
+
+;This is for one pp only...
+(weave_kernel! pp_spindle :vecProduct 
+                          pp_size    ;;global size, here number of perceptrons in the one pp
+                          input_size  ;;inluding the bias term
+                          @input_data_buf_atom 
+                          alpha    ;;should be 
+                          vecProductResult)
+
+(read_buf pp_spindle vecProductResult)
+
+(def correct_answer_buf (atom (make_buf pp_spindle [1.0] :float32)))
+(def pp_answer_buf (make_empty_buf pp_spindle 1 :float32))
+(def number_of_pps (buf_elements @correct_answer_buf))
+
+(read_buf pp_spindle @correct_answer_buf)  ;;The answer for the one buf (given the input data at this time
+(read_buf pp_spindle pp_answer_buf)
+
+(weave_kernel! pp_spindle :reduceToPP
+                          number_of_pps ;;global size, here total number of perceptrons, here just one
+                          pp_size
+                          vecProductResult
+                          pp_answer_buf)
+
+(reduce + (read_buf pp_spindle vecProductResult))
+(read_buf pp_spindle pp_answer_buf)
+
+;;need to intoduce epsilon (funny e), the allowable error range
+;;vecProductResult , pp_answer_buf and  correct_answer_buf not need to be brodcasted out to all the alpha entries, do determine what should be updated
+
+(def epsilon (float epsilon))    ;; The level of error that is allowed.
+;;Error direction
+(class epsilon)
+
+(weave_kernel! pp_spindle :updateAlphas
+                          pp_size             ;global size, here number of perceptrons in the one pp
+                          ;;number_of_pps     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
+                          input_size          ;will be looping using this parameter to update all alphas
+                          epsilon
+                          vecProductResult
+                          pp_answer_buf
+                          @correct_answer_buf
+                          alpha
+                          ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
+                          )
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(quote
+  testing loading buffers quickly
+(time (def foo (make_random_float_array 10000 -0.5 1)))
+(time (loop [i 0 a (atom :a)]
+    (if (= i 60)
+        input_data_buf_atom
+     (recur (inc i) (swap! input_data_buf_atom (fn [_] (make_buf pp_spindle (make_random_float_array 10000 i 1) :float32))))
+      )))
+)
+
+
+(count (read_buf pp_spindle @input_data_buf_atom))
+(first (read_buf pp_spindle @input_data_buf_atom))
+
+(def foo_out (read_buf pp_spindle @input_data_buf_atom))
+(class foo_out)
+(count foo_out)
+
+
+
+
+
+;(stop_spindle! pp_spindle)
+
+
+
+
 
 (quote
 

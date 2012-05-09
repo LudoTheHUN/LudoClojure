@@ -74,7 +74,7 @@
         reading"}
     [(first job) 
      (try ((second job))
-        (catch Exception e (do (println "ERROR inner spindle call failed" (second job))
+        (catch Exception e (do (println "ERROR inner spindle call failed" (second job) "The trace is: " e )
                              :error_in_spun_function)))
      (nth job 2)])
 ;;TODO put another try catch here around ((second job)) to prevent locking up sindles.
@@ -251,8 +251,9 @@
         effect, which it does on it's own"}
   (dosync 
       (ref-set spindle (assoc @spindle :openCLsource openCLsource)))
-  (if (:spinning? spindle)
+  (if (spindle :spinning?)
         (do
+          (println "restarting spindle now!")
           (stop_spindle! spindle)
           (start_spindle! spindle))
         )
