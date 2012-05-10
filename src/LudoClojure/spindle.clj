@@ -191,6 +191,8 @@
         implemented spindle will complete it current jobid and exit out of the
         worker thread."}
 ;TODO write more tests
+;TODO this is effectively broken, the spindle can continue for unknown amount of
+;time
      (dosync (ref-set spindle (assoc @spindle :spinning? false)))
      :spindle_stopping)
 
@@ -255,7 +257,11 @@
         (do
           (println "restarting spindle now!")
           (stop_spindle! spindle)
-          (start_spindle! spindle))
+          (Thread/sleep 500)
+          (if (@spindle :spinning?)
+             (println "not able to stop spindle in time")
+             (start_spindle! spindle))    ;;This is effectively broken
+          )
         )
   :added_openCL)
 

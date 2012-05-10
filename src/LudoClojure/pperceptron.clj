@@ -47,7 +47,7 @@ out[gid] = total;
   "
 }
 :reduceToPP {
-     :desc "reduces the perceptrons outputs to singular pp output"
+     :desc "reduces the many perceptrons outputs to singular pp output"
      :postion 10
      :body "
 __kernel void reduceToPP(
@@ -84,28 +84,57 @@ TODO: optimisation: mearge this kernel with that of vecProduct so that we don't 
      :postion 10
      :body "
 __kernel void updateAlphas(
-    const int input_size,
-    const float epsilon,
+       const int   number_of_pps,
+       const int   pp_size,
+       const int   input_size,
+       const float epsilon,
+    __global float *input_data,
     __global float *vecProductResult,
     __global float *pp_answer_buf,
     __global float *correct_answer_buf,
-    __global float *alpha
+    __global float *alpha,
+    __global int *debug_buff_int
     )
 {
 
 float total = 0.0;
 int gid = get_global_id(0);
 
+/////  int epislons_per_pp = input_size * number_of_pps;
+
+//which pp are we taking pp_answer_buf and correct_answer_buf for?
+int pp_we_are_talking_to = gid / pp_size;
+
+
+float pp_answer      =      pp_answer_buf[pp_we_are_talking_to];
+float upper_correct  = correct_answer_buf[pp_we_are_talking_to] + epsilon;
+float lower_correct  = correct_answer_buf[pp_we_are_talking_to] - epsilon;
+float vProductResult = vecProductResult[gid];
+
+
+if ((pp_answer > upper_correct) && (vProductResult >= 0.0)){
+       for(int k=0; k<input_size; k++) {
+       alpha[gid * input_size + k] =  alpha[gid * input_size + k]  - input_data[k];
+     }
+}
+
+if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
+       for(int k=0; k<input_size; k++) {
+       alpha[gid * input_size + k] =  alpha[gid * input_size + k]  + input_data[k];
+     }
+}
+
 //compute the per perceptron values, ie: which direction is the perceptron wrong.
   for(int k=0; k<input_size; k++) {
-     ///write to the alpha entry conditionally   alpha[gid * input_size + k] = WIP;
+     ///write to the alpha entry conditionally    = WIP;
+   // alpha[gid * input_size + k] =  alpha[gid * input_size + k] 
   }
 }
 "
 }})
 
 
-(def pp_spindle (make_spindle 10000 1))
+(def pp_spindle (make_spindle 1000 1))
 ;Load in openCL kernels
 (spindle_add_openCLsource! pp_spindle (get_openCL_from_kernels opencl_kernels))
 ;Start the openCL spindle used in all subsequent tests
@@ -181,24 +210,33 @@ int gid = get_global_id(0);
 ;;need to intoduce epsilon (funny e), the allowable error range
 ;;vecProductResult , pp_answer_buf and  correct_answer_buf not need to be brodcasted out to all the alpha entries, do determine what should be updated
 
-(def epsilon (float epsilon))    ;; The level of error that is allowed.
+(def epsilon (float 0.01))    ;; The level of error that is allowed.
 ;;Error direction
 (class epsilon)
 
+(def debug_buff_int (make_empty_buf pp_spindle 30 :int32))
+(read_buf pp_spindle debug_buff_int)
+
 (weave_kernel! pp_spindle :updateAlphas
-                          pp_size             ;global size, here number of perceptrons in the one pp
-                          ;;number_of_pps     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
+                          (* pp_size number_of_pps)        ;global size, here number of perceptrons in the one pp * number_of_pps
+                          number_of_pps     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
+                          pp_size
                           input_size          ;will be looping using this parameter to update all alphas
                           epsilon
+                          @input_data_buf_atom
                           vecProductResult
                           pp_answer_buf
                           @correct_answer_buf
                           alpha
+                          debug_buff_int
                           ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
                           )
 
 
-
+(read_buf pp_spindle debug_buff_int)
+(read_buf pp_spindle vecProductResult)
+(read_buf pp_spindle alpha)
+(read_buf pp_spindle @input_data_buf_atom)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
