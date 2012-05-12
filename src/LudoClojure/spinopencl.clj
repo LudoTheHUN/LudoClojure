@@ -131,6 +131,7 @@ focus is on :float32 and :int32 glos types only"}
 ^{:doc "Side effects only, weaves away the a kernel on the given spindle"}
    `(weave_away! ~spindle #(enqueue-kernel ~kernel_keyword ~globalsize ~@bufs)))
 
+;;TODO add a macro? to weave many kernels on a single spin, look out for needing to use (enqueue-barrier) so openCL queue doesn't shoot us in the foot
 
 (defn copy_buf_to_buf! [spindle buf1 buf2]
   (if (and (= (:frame buf1) (:frame buf2))

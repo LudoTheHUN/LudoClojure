@@ -29,9 +29,9 @@ http://www.bealto.com/gpu-gemv_v1.html"
      :body "
 __kernel void vecProduct(
     const int input_size,
-    __global float *in,
+    __global float *input_data,
     __global float *alpha,
-    __global float *out
+    __global float *vecProductResult
     )
 {
 
@@ -39,9 +39,9 @@ float total = 0.0;
 int gid = get_global_id(0);
 
   for(int k=0; k<input_size; k++) {
-       total += alpha[gid * input_size + k] * in[k];
+       total += alpha[gid * input_size + k] * input_data[k];
   }
-out[gid] = total;
+vecProductResult[gid] = total;
 }
 
   "
@@ -65,7 +65,7 @@ int gid = get_global_id(0);
   for(int k=0; k<pp_size; k++) {
       
      binaryPPout = vecProductResult[gid * pp_size + k];
-        if( binaryPPout > 0) {
+        if( binaryPPout > 0.0) {
             total += 1.0; 
            }
         else {
@@ -86,8 +86,11 @@ TODO: optimisation: mearge this kernel with that of vecProduct so that we don't 
 __kernel void updateAlphas(
        const int   number_of_pps,
        const int   pp_size,
-       const int   input_size,
-       const float epsilon,
+       const int   input_size,    //size of inputs plus bias term
+       const float eta,           // learning rate
+       const float gama,          // margin around zero
+       const float epsilon,       // level of error that is allowed
+       const float mu,            //learning modifier around zero
     __global float *input_data,
     __global float *vecProductResult,
     __global float *pp_answer_buf,
@@ -100,7 +103,10 @@ __kernel void updateAlphas(
 float total = 0.0;
 int gid = get_global_id(0);
 
-/////  int epislons_per_pp = input_size * number_of_pps;
+
+
+// which perceptron are we talking to
+int perceptronid = gid * input_size;
 
 //which pp are we taking pp_answer_buf and correct_answer_buf for?
 int pp_we_are_talking_to = gid / pp_size;
@@ -111,24 +117,48 @@ float upper_correct  = correct_answer_buf[pp_we_are_talking_to] + epsilon;
 float lower_correct  = correct_answer_buf[pp_we_are_talking_to] - epsilon;
 float vProductResult = vecProductResult[gid];
 
+//WIP computing the norm of the alphas for this perceptron
+float alphapart            = 0.0;
+float alpha_norm_squared   = 0.0;
+for(int k=0; k<input_size; k++) {
+         alphapart = alpha[perceptronid + k];
+         alpha_norm_squared =  (alphapart * alphapart) + alpha_norm_squared;
+       }
+float alpha_norm_squared_adjustment  = (alpha_norm_squared - 1.0) * eta;      //
+
+
 
 if ((pp_answer > upper_correct) && (vProductResult >= 0.0)){
        for(int k=0; k<input_size; k++) {
-       alpha[gid * input_size + k] =  alpha[gid * input_size + k]  - input_data[k];
-     }
+         alphapart = alpha[perceptronid + k];
+         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta);
+       }
 }
-
-if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
+else if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
        for(int k=0; k<input_size; k++) {
-       alpha[gid * input_size + k] =  alpha[gid * input_size + k]  + input_data[k];
-     }
+         alphapart = alpha[perceptronid + k];
+         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta);
+       }
 }
-
-//compute the per perceptron values, ie: which direction is the perceptron wrong.
-  for(int k=0; k<input_size; k++) {
-     ///write to the alpha entry conditionally    = WIP;
-   // alpha[gid * input_size + k] =  alpha[gid * input_size + k] 
-  }
+//Here we Stabilizing the outputs around zero
+else if ((pp_answer <= upper_correct) && (0.0 <= vProductResult) && (vProductResult < gama)){
+       for(int k=0; k<input_size; k++) {
+         alphapart = alpha[perceptronid + k];
+         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta * mu);
+       }
+}
+else if ((pp_answer >= lower_correct) && (-gama < vProductResult) && (vProductResult < 0)){
+       for(int k=0; k<input_size; k++) {
+         alphapart = alpha[perceptronid + k];
+         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta * mu);
+       }
+}
+else {
+       for(int k=0; k<input_size; k++) {
+         alphapart = alpha[perceptronid + k];
+         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart);
+       }
+}
 }
 "
 }})
@@ -210,19 +240,29 @@ if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
 ;;need to intoduce epsilon (funny e), the allowable error range
 ;;vecProductResult , pp_answer_buf and  correct_answer_buf not need to be brodcasted out to all the alpha entries, do determine what should be updated
 
-(def epsilon (float 0.01))    ;; The level of error that is allowed.
+    
 ;;Error direction
 (class epsilon)
 
 (def debug_buff_int (make_empty_buf pp_spindle 30 :int32))
 (read_buf pp_spindle debug_buff_int)
 
-(weave_kernel! pp_spindle :updateAlphas
+
+(def eta           (float 0.01)) ;;  learning_rate
+(def gama          (float 0.01)) ;;  margin around zero
+(def epsilon       (float 0.01)) ;;  level of error that is allowed.
+(def mu            (float 1.0 )) ;;  learning modifier around zero
+
+
+(defn flop_pp [] (weave_kernel! pp_spindle :updateAlphas
                           (* pp_size number_of_pps)        ;global size, here number of perceptrons in the one pp * number_of_pps
                           number_of_pps     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
                           pp_size
                           input_size          ;will be looping using this parameter to update all alphas
+                          eta
+                          gama
                           epsilon
+                          mu
                           @input_data_buf_atom
                           vecProductResult
                           pp_answer_buf
@@ -230,13 +270,29 @@ if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
                           alpha
                           debug_buff_int
                           ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
-                          )
+                          ))
+(time (do (flop_pp)
+        (read_buf pp_spindle alpha)
+        ))
 
+(quote performance test: 10000 kernels via spindle in 1.5 seconds
+(time (loop [i 0 a (atom :a)]
+    (if (= i 10000)
+        (time (do (read_buf pp_spindle alpha)))
+        ;done
+     (recur (inc i) (flop_pp) )
+      )))
+)
 
 (read_buf pp_spindle debug_buff_int)
 (read_buf pp_spindle vecProductResult)
 (read_buf pp_spindle alpha)
 (read_buf pp_spindle @input_data_buf_atom)
+
+
+;;TODO  TEST it all
+;;TODO  wrap it all
+;;TODO look out for @input_data_buf_atom @correct_answer_buf being switched out from underneath you, use a (let) closure.
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
