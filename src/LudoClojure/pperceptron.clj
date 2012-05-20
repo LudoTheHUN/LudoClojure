@@ -12,10 +12,21 @@
 
 
 ;; Naming convention
-;;   pps          is an array of perceptron (not being impelented in the early stage, but this is the target)
-;;   pp           is one paralel perceptron
-;;   perceptron   is one of the perceptrons within a pp
-;;   alpha        holds over all pps, each pp and each perceptron, the weight poiting to input data arrray
+;;   pps               is an array of pp (parallel-perceptrons) (not being impelented in the early stage, but this is the target)
+;;   pp                is one paralel-perceptron
+;;   perceptron        is one of the perceptrons within a pp
+;;   alpha             holds over all pps, each pp and each perceptron, the weight poiting to input_data array
+;;   input_data        data being observed by the system, this is 'z' in the literature.
+;;   vecProductResult  holds alpha*input_data per perceptron
+;;   pp_answer         Result of pps. The results of each pp. Each array element is a result of a pp.
+;;   correct_answer    What pp_answer should be.
+
+
+;;       const int   input_size,    //size of inputs plus bias term
+;;       const float eta,           // learning rate
+;;       const float gama,          // margin around zero
+;;       const float epsilon,       // level of error that is allowed
+;;       const float mu,            //learning modifier around zero
 
 
 
@@ -65,14 +76,14 @@ int gid = get_global_id(0);
   for(int k=0; k<pp_size; k++) {
       
      binaryPPout = vecProductResult[gid * pp_size + k];
-        if( binaryPPout > 0.0) {
+        if( binaryPPout >= 0.0) {
             total += 1.0; 
            }
         else {
             total += -1.0;
              }
   }
-pp_answer_buf[gid] = total / pp_size;  //Different squashing functions could be implemente here, eg: binary 1,-1 
+pp_answer_buf[gid] = total / pp_size;  //Different squashing functions could be implemente here, eg: binary 1,-1   devide by pp_size is actually incorrect.
 }
 "
 }
@@ -122,7 +133,7 @@ float alphapart            = 0.0;
 float alpha_norm_squared   = 0.0;
 for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha_norm_squared =  (alphapart * alphapart) + alpha_norm_squared;
+         alpha_norm_squared +=  (alphapart * alphapart);
        }
 float alpha_norm_squared_adjustment  = (alpha_norm_squared - 1.0) * eta;      //
 
@@ -187,7 +198,7 @@ else {
 (make_random_float_array 5 -0.5 1)
 (make_random_float_array 6 -0.5 1)
 
-(def pp_size 5)
+(def pp_size 12800)
 (def input_size (buf_elements @input_data_buf_atom))
 (def size_of_alpha_needed (* input_size pp_size))
 
@@ -211,28 +222,35 @@ else {
 (def vecProductResult (make_empty_buf pp_spindle pp_size :float32))
 (read_buf pp_spindle vecProductResult)
 
-;This is for one pp only...
-(weave_kernel! pp_spindle :vecProduct 
-                          pp_size    ;;global size, here number of perceptrons in the one pp
-                          input_size  ;;inluding the bias term
-                          @input_data_buf_atom 
-                          alpha    ;;should be 
-                          vecProductResult)
-
-(read_buf pp_spindle vecProductResult)
-
 (def correct_answer_buf (atom (make_buf pp_spindle [1.0] :float32)))
 (def pp_answer_buf (make_empty_buf pp_spindle 1 :float32))
 (def number_of_pps (buf_elements @correct_answer_buf))
 
+;This is for one pp only...
+(defn vecProduct [] 
+(weave_kernel! pp_spindle :vecProduct 
+               ;;TODO add many pps here, need to test
+                          (* pp_size number_of_pps)    ;;global size, here number of perceptrons in the one pp
+                          input_size  ;;inluding the bias term
+                          @input_data_buf_atom 
+                          alpha    ;;should be 
+                          vecProductResult))
+(vecProduct)
+
+(read_buf pp_spindle vecProductResult)
+
+
+
 (read_buf pp_spindle @correct_answer_buf)  ;;The answer for the one buf (given the input data at this time
 (read_buf pp_spindle pp_answer_buf)
 
+(defn reduceToPP []
 (weave_kernel! pp_spindle :reduceToPP
                           number_of_pps ;;global size, here total number of perceptrons, here just one
                           pp_size
                           vecProductResult
-                          pp_answer_buf)
+                          pp_answer_buf))
+(reduceToPP)
 
 (reduce + (read_buf pp_spindle vecProductResult))
 (read_buf pp_spindle pp_answer_buf)
@@ -240,18 +258,18 @@ else {
 ;;need to intoduce epsilon (funny e), the allowable error range
 ;;vecProductResult , pp_answer_buf and  correct_answer_buf not need to be brodcasted out to all the alpha entries, do determine what should be updated
 
-    
-;;Error direction
-(class epsilon)
+
+
+
 
 (def debug_buff_int (make_empty_buf pp_spindle 30 :int32))
 (read_buf pp_spindle debug_buff_int)
 
 
 (def eta           (float 0.01)) ;;  learning_rate
-(def gama          (float 0.01)) ;;  margin around zero
-(def epsilon       (float 0.01)) ;;  level of error that is allowed.
-(def mu            (float 1.0 )) ;;  learning modifier around zero
+(def gama          (float 0.05)) ;;  margin around zero
+(def epsilon       (float 0.001)) ;;  level of error that is allowed.
+(def mu            (float 0.5 )) ;;  learning modifier around zero
 
 
 (defn flop_pp [] (weave_kernel! pp_spindle :updateAlphas
@@ -275,9 +293,9 @@ else {
         (read_buf pp_spindle alpha)
         ))
 
-(quote performance test: 10000 kernels via spindle in 1.5 seconds
+(quote performance test 10000 kernels via spindle in 1.5 seconds
 (time (loop [i 0 a (atom :a)]
-    (if (= i 10000)
+    (if (= i 1000)
         (time (do (read_buf pp_spindle alpha)))
         ;done
      (recur (inc i) (flop_pp) )
@@ -286,17 +304,117 @@ else {
 
 (read_buf pp_spindle debug_buff_int)
 (read_buf pp_spindle vecProductResult)
+
+
 (read_buf pp_spindle alpha)
 (read_buf pp_spindle @input_data_buf_atom)
+(read_buf pp_spindle @correct_answer_buf)
 
+(defn onelearningcycle [] (do
+(vecProduct)
+(reduceToPP)
+;(read_buf pp_spindle pp_answer_buf)
+;(read_buf pp_spindle alpha)
+(flop_pp)
+))
+
+
+
+
+;;(def input_data_buf_atom  (atom (make_buf pp_spindle [1.0 0.0 -1.0] :float32)))
+;;(def correct_answer_buf (atom (make_buf pp_spindle [1.0] :float32)))
+
+(defn updatebuf [bufatom arrayvalue]
+   (swap! bufatom (fn [_] (make_buf pp_spindle arrayvalue :float32))))
+
+
+(defn oneepoch [] (do
+(updatebuf input_data_buf_atom [1.0 1.0 -1.0])
+(updatebuf correct_answer_buf [-1.0])
+(onelearningcycle)
+(updatebuf input_data_buf_atom [1.0 0.0 -1.0])
+(updatebuf correct_answer_buf [1.0])
+(onelearningcycle)
+(updatebuf input_data_buf_atom [0.0 0.0 -1.0])
+(updatebuf correct_answer_buf [-1.0])
+(onelearningcycle)
+(updatebuf input_data_buf_atom [0.0 1.0 -1.0])
+(updatebuf correct_answer_buf [1.0])
+(onelearningcycle)
+;(read_buf pp_spindle alpha)
+))
+
+(time (updatebuf input_data_buf_atom [0.0 1.0 -1.0]))
+(time (onelearningcycle))
+
+(time (oneepoch))
+(defn getanswer [questionarray]
+   (updatebuf input_data_buf_atom questionarray)
+   (vecProduct)
+   (reduceToPP)
+   (read_buf pp_spindle pp_answer_buf))
+(time (oneepoch))
+(getanswer [1.0 1.0 -1.0])
+(getanswer [1.0 0.0 -1.0])
+(getanswer [0.0 0.0 -1.0])
+(getanswer [0.0 1.0 -1.0])
+
+
+
+(def eta           (float 0.01)) ;;  learning_rate
+(def gama          (float 0.05)) ;;  margin around zero
+(def epsilon       (float 0.001)) ;;  level of error that is allowed.
+(def mu            (float 1.0 )) ;;  learning modifier around zero
+
+(quote performance test 10000 kernels via spindle in 1.5 seconds
+(time (loop [i 0 a (atom :a)]
+    (if (= i 10)
+        (time (do   (println (getanswer [1.0 1.0 -1.0]))
+                    (println (getanswer [1.0 0.0 -1.0]))
+                    (println (getanswer [0.0 0.0 -1.0]))
+                    (println (getanswer [0.0 1.0 -1.0]))
+                    ;(read_buf pp_spindle alpha)
+                    ))
+        ;done
+     (recur (inc i) (do (oneepoch) (if (= 49 (mod i 50)) (println 
+                                     (getanswer [1.0 1.0 -1.0])
+                                     (getanswer [1.0 0.0 -1.0])
+                                     (getanswer [0.0 0.0 -1.0])
+                                     (getanswer [0.0 1.0 -1.0])
+                                     ;(read_buf pp_spindle alpha)
+                                     ;(read_buf pp_spindle vecProductResult)
+                                     ))
+                      
+                      ) )
+      )))
+)
+(/ 54234 1000.0) (mod 3 3)
+
+
+
+(getanswer [1.0 1.0 -1.0])
+(getanswer [0.5 0.5 -1.0])
+;;TODO grid this out in small inrements
 
 ;;TODO  TEST it all
 ;;TODO  wrap it all
+;;TODO need to do squashing function properly, devide by n is wrong
 ;;TODO look out for @input_data_buf_atom @correct_answer_buf being switched out from underneath you, use a (let) closure.
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+
+
+
+
+
+
+
+
 
 
 

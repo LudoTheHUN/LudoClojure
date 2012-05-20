@@ -273,8 +273,5 @@
 (defn sindle_joblag [spindle]
    (let [s @spindle]
      {:jobrequest (:jobid s) :jobtodonext (first (peek (s :queue)))}))
-    
-
-
 
 

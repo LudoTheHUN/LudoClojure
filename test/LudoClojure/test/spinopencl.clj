@@ -138,6 +138,14 @@
 (time (count foo)))
 
 
+
+
+(def foobuff (make_buf opencl_spindle [1.0 1.123 -1.0] :float32))
+(enqueue-overwrite foobuff [0 2] [2.0 2.32 1.12])
+(read_buf opencl_spindle foobuff)
+
+
+
 )
 
 

@@ -149,6 +149,54 @@ focus is on :float32 and :int32 glos types only"}
 
 
 
+(quote testing-enqueue-overwrite
+(def opencl_spindle (make_spindle 100 1))
+(spindle_add_openCLsource! opencl_spindle (get_openCL_from_kernels opencl_kernels))
+(start_spindle! opencl_spindle)
+(def foobuff (make_buf opencl_spindle [1.0 1.123 -1.0] :float32))
+(def foobuff2 (make_buf opencl_spindle [9.0 9.123 -9.0] :float32))
+(to-buffer [2.0 2.32 1.12] :float32)
+
+
+(defn weave_buf_overwrite! [spindle buf cloj_array frame]
+    ;;Not this minus is WHACK, litle edian??!     ;;signature in calx;   ;[destination [lower upper] source]
+    ;;This should be much faster then creating a whole new buffer as swap!ing it in. However, state managment is an a big concern... as is with kernel executions
+    (weave_away! spindle (fn [] (enqueue-overwrite buf [-3 0] (to-buffer cloj_array frame)))))  ;;Not this minus is WHACK, litle edian??!
+
+(defn weave_buf_copy! [spindle buf sourcebuf]
+   ;;Copies openCL kernels to other openCL kernels   ;;signature in calx; [destination destination-offset source [lower upper]]
+   ;;TODO find out how offsers work
+    (weave_away! spindle (fn [] (enqueue-copy buf 0 sourcebuf [-2 0]  ))))
+
+(enqueue-overwrite foobuff [0 2] (to-buffer [2.0 2.32 1.12] :float32))    ;[destination [lower upper] source]
+(enqueue-copy foobuff 0 (to-buffer [2.0 2.32 1.12] :float32) [-2 0])         ; [destination destination-offset source [lower upper]]
+
+;;speed tests
+(time (dorun 50 (repeatedly (fn [] 
+(let [largearray (apply vector (take 10000 (repeat 1.0)))
+      foo (to-buffer largearray :float32)
+      unfooed (from-buffer foo :float32)
+      foobuffun (make_buf opencl_spindle unfooed :float32)
+      unbuffed (read_buf opencl_spindle foobuffun)]
+  (count unbuffed)    )))))
+      
+(time (def largearray (apply vector (take 1000040 (repeat 1.0)))))
+(time (def foo (to-buffer largearray :float32)))
+(time (def unfooed (from-buffer foo :float32)))
+(time (def foobuffun (make_buf opencl_spindle unfooed :float32)))
+(time (def unbuffed (read_buf opencl_spindle foobuffun)))
+
+(read_buf opencl_spindle foobuff)
+(time (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32))
+(time (read_buf opencl_spindle foobuff))
+
+(time (weave_buf_copy! opencl_spindle foobuff foobuff2))
+(read_buf opencl_spindle foobuff)
+(read_buf opencl_spindle foobuff2)
+
+
+)
+
 
 ;TODO look at using defmulti + defmethod
 ;TODO hide away type of buffer?
