@@ -149,6 +149,8 @@ focus is on :float32 and :int32 glos types only"}
 
 
 
+
+
 (quote testing-enqueue-overwrite
 (def opencl_spindle (make_spindle 100 1))
 (spindle_add_openCLsource! opencl_spindle (get_openCL_from_kernels opencl_kernels))
@@ -173,13 +175,13 @@ focus is on :float32 and :int32 glos types only"}
 
 ;;speed tests
 (time (dorun 50 (repeatedly (fn [] 
-(let [largearray (apply vector (take 10000 (repeat 1.0)))
+(let [largearray (apply vector (take 100000 (repeat 1.0)))
       foo (to-buffer largearray :float32)
       unfooed (from-buffer foo :float32)
       foobuffun (make_buf opencl_spindle unfooed :float32)
       unbuffed (read_buf opencl_spindle foobuffun)]
   (count unbuffed)    )))))
-      
+
 (time (def largearray (apply vector (take 1000040 (repeat 1.0)))))
 (time (def foo (to-buffer largearray :float32)))
 (time (def unfooed (from-buffer foo :float32)))
@@ -187,7 +189,20 @@ focus is on :float32 and :int32 glos types only"}
 (time (def unbuffed (read_buf opencl_spindle foobuffun)))
 
 (read_buf opencl_spindle foobuff)
-(time (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32))
+
+(time (to-buffer [2.0 2.32 1.12] :float32)) (time (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32))
+(time (read_buf opencl_spindle foobuff))
+(time (do (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32)
+        (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32)
+        (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32)
+        (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32)
+        (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32)
+        (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 7.2] :float32)
+        (weave_buf_overwrite! opencl_spindle foobuff [5.2 6.2 44.2] :float32)
+          (read_buf opencl_spindle foobuff)
+      ))
+
+
 (time (read_buf opencl_spindle foobuff))
 
 (time (weave_buf_copy! opencl_spindle foobuff foobuff2))
@@ -196,6 +211,29 @@ focus is on :float32 and :int32 glos types only"}
 
 
 )
+
+
+
+
+(quote testing work without calx macros
+     ;; built it into calx1.4
+(platform)
+(available-devices (platform))
+
+(context)
+(create-context (available-devices (platform)) )
+
+(defn create-context
+  "Creates a context which uses the specified devices.  Using more than one device is not recommended."
+  [& devices]
+  {:context (.createContext ^CLPlatform (platform) nil (into-array devices))
+   :cache (ref [])})
+
+     (.createContext ^CLPlatform (platform) nil (into-array (available-devices (platform))))  
+(into-array (available-devices (platform)))
+
+       
+       )
 
 
 ;TODO look at using defmulti + defmethod
