@@ -18,9 +18,9 @@
 (def a_float_array [0.1 0.2 3 3245334])
 (def a_int_array [1 2 3 4 7])
 
-(def float_array_buff  (make_buf opencl_spindle a_float_array :float32))
-(def float_array_buff2 (make_buf opencl_spindle a_float_array :float32))
-(def int_array_buff   (make_buf opencl_spindle a_int_array   :int32))
+(def float_array_buff  (make_buf opencl_spindle a_float_array :float32-le))
+(def float_array_buff2 (make_buf opencl_spindle a_float_array :float32-le))
+(def int_array_buff   (make_buf opencl_spindle a_int_array   :int32-le))
 
 (deftest test_opencl_kernels_existance
    ;;Test the existance of inbuilt kernels
@@ -30,7 +30,7 @@
 
 (deftest test_opencl_make_buf
    ;;Test the existance of inbuilt kernels
-  (let [a_buf (make_buf opencl_spindle a_float_array :float32)]
+  (let [a_buf (make_buf opencl_spindle a_float_array :float32-le)]
    (is (= (class a_buf) calx.data.Buffer))
    (:buffer a_buf))
   )
@@ -40,25 +40,25 @@
   ;;Testing read_buf
   (is (= (:elements float_array_buff) 4))
   (let [b_float_array (conj (vector-of :float) 0.2 0.4 0.6 0.8 1.0)
-        b_float_buf (make_buf opencl_spindle b_float_array :float32)]
+        b_float_buf (make_buf opencl_spindle b_float_array :float32-le)]
      (is (= (read_buf opencl_spindle b_float_buf) b_float_array)))
   (let [c_int_array (conj (vector-of :int) 1 7 8 9 11)
-        c_int_buf (make_buf opencl_spindle c_int_array :int32)]
+        c_int_buf (make_buf opencl_spindle c_int_array :int32-le)]
      (is (= (read_buf opencl_spindle c_int_buf) c_int_array)))
 )
 
 (deftest test_opencl_make_empty_buf
-    (is (= (count (read_buf opencl_spindle (make_empty_buf opencl_spindle 10 :float32)))
+    (is (= (count (read_buf opencl_spindle (make_empty_buf opencl_spindle 10 :float32-le)))
            10))
-    (is (= (count (read_buf opencl_spindle (make_empty_buf opencl_spindle 13 :int32)))
+    (is (= (count (read_buf opencl_spindle (make_empty_buf opencl_spindle 13 :int32-le)))
            13))
-    (is (= (class (read_buf opencl_spindle (make_empty_buf opencl_spindle 111 :float32)))
+    (is (= (class (read_buf opencl_spindle (make_empty_buf opencl_spindle 111 :float32-le)))
            clojure.lang.PersistentVector))
       )
 
 (deftest test_opencl_weave_kernel!
     (let [c_float_array (conj (vector-of :float) 4.2 4.4 44.6 444.8 5.0)
-         local_float_buf (make_buf opencl_spindle c_float_array :float32)
+         local_float_buf (make_buf opencl_spindle c_float_array :float32-le)
          ]
      (is (= (read_buf opencl_spindle local_float_buf) c_float_array))
      (weave_kernel! opencl_spindle :addOneToFloat 5 
@@ -72,26 +72,28 @@
 
 
 (deftest test_opencl_copy_buf_to_buf!
-  (let [ c_float_array (conj (vector-of :float) 2.2 33.4 34.6 34.8 45.0)
-         local_float_buf1 (make_empty_buf opencl_spindle 5 :float32)
-         local_float_buf2 (make_buf opencl_spindle c_float_array :float32)
+  (do (let [ c_float_array (conj (vector-of :float) 2.2 33.4 34.6 34.8 45.0)
+         local_float_buf1 (make_empty_buf opencl_spindle 5 :float32-le)   ;;;Note that make_empty_buf sometimes behaves badly and holds values taken from somehere already populated... thus test can fail
+         local_float_buf2 (make_buf opencl_spindle c_float_array :float32-le)
+        ]
+     (do (is (= (read_buf opencl_spindle local_float_buf2) c_float_array))
+         ;(opencl_checkpoint opencl_spindle)
+         (copy_buf_to_buf! opencl_spindle local_float_buf1 local_float_buf2)
+         (Thread/sleep 500)
+         (is (= (read_buf opencl_spindle local_float_buf1)
+                (read_buf opencl_spindle local_float_buf2))))
+   )
+   (let [ c_float_array (conj (vector-of :int) 2 33 64 30 45)
+         local_float_buf1 (make_empty_buf opencl_spindle 5 :int32-le)
+         local_float_buf2 (make_buf opencl_spindle c_float_array :int32-le)
         ]
      (do (is (= (read_buf opencl_spindle local_float_buf2) c_float_array))
          ;(opencl_checkpoint opencl_spindle)
          (copy_buf_to_buf! opencl_spindle local_float_buf2 local_float_buf1)
+         (Thread/sleep 200)
          (is (= (read_buf opencl_spindle local_float_buf1)
                 (read_buf opencl_spindle local_float_buf2))))
-   )
-   (let [ c_float_array (conj (vector-of :float) 2 33 64 34 45)
-         local_float_buf1 (make_empty_buf opencl_spindle 5 :int32)
-         local_float_buf2 (make_buf opencl_spindle c_float_array :int32)
-        ]
-     (do (is (= (read_buf opencl_spindle local_float_buf2) c_float_array))
-         ;(opencl_checkpoint opencl_spindle)
-         (copy_buf_to_buf! opencl_spindle local_float_buf2 local_float_buf1)
-         (is (= (read_buf opencl_spindle local_float_buf1)
-                (read_buf opencl_spindle local_float_buf2))))
-   )
+   ))
 )
 
 

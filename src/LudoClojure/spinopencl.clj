@@ -94,7 +94,7 @@ __kernel void addOneToFloat(
 })
 
 (defn valid_frame [frame]
-  (or (= frame :float32) (= frame :int32)))
+  (or (= frame :float32-le) (= frame :int32-le)))
 
 
 

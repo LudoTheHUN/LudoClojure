@@ -138,8 +138,8 @@ __kernel void foopp(
    ;(println test_spindle_CL)
    ;;If there is a timeout, this barfs violently, find out why...
    
-   (weave_away! test_spindle_CL (fn [] (def openclarray  (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32))))
-   (weave_away! test_spindle_CL (fn [] (def openclarray2 (wrap [(float 15.0) (float 16.0) (float 170.0) (float 18.0)] :float32))))
+   (weave_away! test_spindle_CL (fn [] (def openclarray  (wrap [(float 12.0) (float 12.0) (float 12.0) (float 12.0)] :float32-le))))
+   (weave_away! test_spindle_CL (fn [] (def openclarray2 (wrap [(float 15.0) (float 16.0) (float 170.0) (float 18.0)] :float32-le))))
    ;(println "done opnecl defs")
    ;(println test_spindle_CL)
    
