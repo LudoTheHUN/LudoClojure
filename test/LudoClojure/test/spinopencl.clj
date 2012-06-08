@@ -72,28 +72,32 @@
 
 
 (deftest test_opencl_copy_buf_to_buf!
-  (do (let [ c_float_array (conj (vector-of :float) 2.2 33.4 34.6 34.8 45.0)
+  (do 
+    (let [ c_float_array (conj (vector-of :float) 2.2 33.4 34.6 34.8 45.0)
          local_float_buf1 (make_empty_buf opencl_spindle 5 :float32-le)   ;;;Note that make_empty_buf sometimes behaves badly and holds values taken from somehere already populated... thus test can fail
          local_float_buf2 (make_buf opencl_spindle c_float_array :float32-le)
         ]
-     (do (is (= (read_buf opencl_spindle local_float_buf2) c_float_array))
+     (do (Thread/sleep 500)
+       (is (= (read_buf opencl_spindle local_float_buf2) c_float_array))
          ;(opencl_checkpoint opencl_spindle)
          (copy_buf_to_buf! opencl_spindle local_float_buf1 local_float_buf2)
          (Thread/sleep 500)
          (is (= (read_buf opencl_spindle local_float_buf1)
                 (read_buf opencl_spindle local_float_buf2))))
-   )
+    )
    (let [ c_float_array (conj (vector-of :int) 2 33 64 30 45)
          local_float_buf1 (make_empty_buf opencl_spindle 5 :int32-le)
          local_float_buf2 (make_buf opencl_spindle c_float_array :int32-le)
         ]
-     (do (is (= (read_buf opencl_spindle local_float_buf2) c_float_array))
+     (do (Thread/sleep 500)
+         (is (= (read_buf opencl_spindle local_float_buf2) c_float_array))
          ;(opencl_checkpoint opencl_spindle)
          (copy_buf_to_buf! opencl_spindle local_float_buf2 local_float_buf1)
          (Thread/sleep 200)
          (is (= (read_buf opencl_spindle local_float_buf1)
                 (read_buf opencl_spindle local_float_buf2))))
-   ))
+   )
+   )
 )
 
 

@@ -18,7 +18,7 @@ This is the old values that was here....
    (is (= "Terminating liquid" (run_liquid! 64 64 sourceOpenCL)))
    (is (= "Terminating liquid" (run_liquid! 1 1 sourceOpenCL)))
    )
-   
+
 (deftest liquid-test
    (swap! readout_liquid_status (fn [_] true))
    ;(is (= "Terminating liquid" (run_liquid! globalsize connections sourceOpenCL)))

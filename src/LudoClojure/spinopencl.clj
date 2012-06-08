@@ -137,9 +137,9 @@ focus is on :float32 and :int32 glos types only"}
   (if (and (= (:frame buf1) (:frame buf2))
            (>= (buf_elements buf2) (buf_elements buf1)))
     (cond 
-      (= (:frame buf1) :float32)
+      (= (:frame buf1) :float32-le)
          (weave_kernel! spindle :copyFloatXtoY (buf_elements buf1) buf1 buf2)
-      (= (:frame buf1) :int32)
+      (= (:frame buf1) :int32-le)
          (weave_kernel! spindle :copyIntXtoY (buf_elements buf1) buf1 buf2)
       :else 
          :bad_frame__copy_buf_to_buf2)

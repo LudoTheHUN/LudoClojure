@@ -1,9 +1,10 @@
 (ns LudoClojure.core
  ; (:use LudoClojure.Win_scrachAlwaysRun)
-  (:require calx)  ;;this means that I don't haveto have a copy of the calx source in src
- 
-  (:require clojure.contrib.duck-streams )   ;needed for serde
-  (:require clojure.contrib.seq-utils)       ;needed for serde
+  ;(:require calx)  ;;this means that I don't haveto have a copy of the calx source in src
+  (:use [LudoClojure.pperceptron]
+        [LudoClojure.opencl-utils])
+  ;(:require clojure.contrib.duck-streams )   ;needed for serde
+  ;(:require clojure.contrib.seq-utils)       ;needed for serde
   ;(:require [LudoClojure.randomnumberexplorer.randomnumerexplorer :as UI1])
   ;(:require [LudoClojure.timelooper1.timelooper1 :as UI2])
 
@@ -25,23 +26,14 @@
 ;        [java.nio ByteOrder ByteBuffer])
 
 
-(use 'calx)
-(use 'clojure.contrib.math)
+;(use 'calx)
+;(use 'clojure.contrib.math)
 
 (set! *warn-on-reflection* false)
 
 
-(defn serialize
-  "Print a data structure to a file so that we may read it in later."
-  [data-structure #^String filename]
-  (clojure.contrib.duck-streams/with-out-writer
-    (java.io.File. filename)
-    (binding [*print-dup* true] (prn data-structure))))
 
-;; This allows us to then read in the structure at a later time, like so:
-(defn deserialize [filename]
-  (with-open [r (PushbackReader. (FileReader. filename))]
-    (read r)))
+
 
 
 (defn hello

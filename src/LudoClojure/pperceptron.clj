@@ -1,17 +1,18 @@
 (ns LudoClojure.pperceptron
-  (:use [LudoClojure.spindle])
-  (:use [LudoClojure.spinopencl])
+ ; (:use [LudoClojure.spindle])
+ ; (:use [LudoClojure.spinopencl])
+  (:use [LudoClojure.opencl-utils])
   )
-;(use 'calx)
+(use 'calx)
 
 (+ 1 2)
+(println "loading pperceptron")
+
 
 ;TODO define what we want
 ;Implement it
 
-
-
-;; Naming convention
+;; PP Naming convention
 ;;   pps               is an array of pp (parallel-perceptrons) (not being impelented in the early stage, but this is the target)
 ;;   pp                is one paralel-perceptron
 ;;   perceptron        is one of the perceptrons within a pp
@@ -33,7 +34,7 @@
 (add_kernel_specs opencl_kernels
 {
 :vecProduct {
-     :desc "computes a vector product of an *in sized array by *in time *out  
+     :desc "computes a vector product of an *in sized array by *in times *out  
 vector, resultingin *out sized array, notes on approach here:
 http://www.bealto.com/gpu-gemv_v1.html"
      :postion 10
@@ -175,36 +176,150 @@ else {
 }})
 
 
+;opencl_env
+;testing kernel compilation 
+(opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
+
+;see which kernel programs
+(:progs @opencl_env)
+
+
+;(def my_openCL_buf4  (lg_create-buffer my_context 10 :int32-le))
+;(lg_wrap my_context [5.0 5.2 5.3] :float32-le)
+
+
+
+(def input_data_buf_atom   (atom (lg_wrap (:context @opencl_env) [1.0 0.0 -1.0] :int32-le)))
+(def pp_size 100)
+(def input_size (buf_elements @input_data_buf_atom))
+(def size_of_alpha_needed (* input_size pp_size))
+
+(time (def alpha  (let [buf (lg_wrap (:context @opencl_env) (make_random_float_array size_of_alpha_needed -0.5 1) :float32)]
+                       (lg_finish (:queue @opencl_env))
+                       buf
+                       )
+        ))
+
+;;Demoing readig data off
+(time (def readalpha @(lg_enqueue-read alpha (:queue @opencl_env))))
+(count readalpha)
+
+;;Demoing swapping in data via atomic swap
+@(lg_enqueue-read @input_data_buf_atom (:queue @opencl_env))
+(swap! input_data_buf_atom (fn [_] (lg_wrap (:context @opencl_env) [1.0 1.0 -1.0] :float32-le)))
+@(lg_enqueue-read @input_data_buf_atom (:queue @opencl_env))
+
+
+;;TODO, pull all these on a single pp object that has a generator?
+(def vecProductResult (lg_create-buffer (:context @opencl_env) pp_size :float32-le))
+(def correct_answer_buf (atom (lg_wrap (:context @opencl_env) [1.0] :float32-le)))
+(def pp_answer_buf (lg_create-buffer (:context @opencl_env) 1 :float32-le))
+
+(def debug_buff_int (lg_create-buffer (:context @opencl_env) 30 :int32-le))
+
+
+(def number_of_pps (buf_elements @correct_answer_buf))
+
+
+(defn vecProduct []
+  (lg_enqueue-kernel (:queue @opencl_env) (:progs @opencl_env)
+      :vecProduct  (* pp_size number_of_pps)    ;;global size, here number of perceptrons in the one pp
+                          input_size  ;;inluding the bias term
+                          @input_data_buf_atom
+                          alpha    ;;should be 
+                          vecProductResult))
+
+@(lg_enqueue-read vecProductResult (:queue @opencl_env))
+(vecProduct)
+@(lg_enqueue-read vecProductResult (:queue @opencl_env))
+
+
+
+(defn reduceToPP []
+(lg_enqueue-kernel (:queue @opencl_env) (:progs @opencl_env) 
+                          :reduceToPP
+                          number_of_pps ;;global size, here total number of perceptrons, here just one
+                          pp_size
+                          vecProductResult
+                          pp_answer_buf))
+
+@(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
+(reduceToPP)
+@(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
+
+
+
+(def eta           (float 0.01)) ;;  learning_rate
+(def gama          (float 0.05)) ;;  margin around zero
+(def epsilon       (float 0.001)) ;;  level of error that is allowed.
+(def mu            (float 0.5 )) ;;  learning modifier around zero
+
+
+(defn flop_pp [] (lg_enqueue-kernel (:queue @opencl_env) (:progs @opencl_env) 
+                          :updateAlphas
+                          (* pp_size number_of_pps)        ;global size, here number of perceptrons in the one pp * number_of_pps
+                          number_of_pps     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
+                          pp_size
+                          input_size          ;will be looping using this parameter to update all alphas
+                          eta
+                          gama
+                          epsilon
+                          mu
+                          @input_data_buf_atom
+                          vecProductResult
+                          pp_answer_buf
+                          @correct_answer_buf
+                          alpha
+                          debug_buff_int
+                          ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
+                          ))
+
+
+(flop_pp)
+
+@(lg_enqueue-read alpha (:queue @opencl_env))
+
+
+(vecProduct)
+(reduceToPP)
+@(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
+(flop_pp)
+
+@(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
+@(lg_enqueue-read @correct_answer_buf (:queue @opencl_env))
+(lg_enqueue-overwrite @correct_answer_buf [-1 0] (to-buffer [-1.0] :float32-le) (:queue @opencl_env))
+
+
+(lg_enqueue-overwrite @input_data_buf_atom [-3 0] (to-buffer [1.0 0.0 -1.0] :float32-le) (:queue @opencl_env))
+(lg_enqueue-overwrite @correct_answer_buf [-1 0] (to-buffer [-1.0] :float32-le) (:queue @opencl_env))
+(vecProduct)
+(reduceToPP)
+@(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
+
+
+(lg_enqueue-overwrite @input_data_buf_atom [-3 0] (to-buffer [1.0 1.0 -1.0] :float32-le) (:queue @opencl_env))
+(lg_enqueue-overwrite @correct_answer_buf [-1 0] (to-buffer [1.0] :float32-le) (:queue @opencl_env))
+(vecProduct)
+(reduceToPP)
+@(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
+
+
+
+
+
+
+
+
+(quote
 (def pp_spindle (make_spindle 1000 1))
 ;Load in openCL kernels
 (spindle_add_openCLsource! pp_spindle (get_openCL_from_kernels opencl_kernels))
 ;Start the openCL spindle used in all subsequent tests
 (start_spindle! pp_spindle)
-
-
-
 ;;Note, -1.0 at the end always needs to be there, this is the bias term.
 (def input_data_buf_atom  (atom (make_buf pp_spindle [1.0 0.0 -1.0] :float32)))
-
-
-(defn make_random_float_array [size booster seed]
-   (doall
-   (let [r (java.util.Random. seed)]
-     (loop [i 0 outlist []]
-       (if (= i size)
-         outlist
-         (recur (inc i) (conj outlist (+ (* (float (.nextInt r 100)) 0.01) booster) )))))))
-
-(make_random_float_array 5 -0.5 1)
-(make_random_float_array 6 -0.5 1)
-
-(def pp_size 12800)
-(def input_size (buf_elements @input_data_buf_atom))
-(def size_of_alpha_needed (* input_size pp_size))
-
+;;;;;;;
 (def alpha   (make_buf pp_spindle (make_random_float_array size_of_alpha_needed -0.5 1) :float32))
-
-
 (read_buf pp_spindle alpha)
 (read_buf pp_spindle @input_data_buf_atom)
 
@@ -226,6 +341,7 @@ else {
 (def pp_answer_buf (make_empty_buf pp_spindle 1 :float32))
 (def number_of_pps (buf_elements @correct_answer_buf))
 
+;;;;;;;;;;DOEN REWRITE TO HERE
 ;This is for one pp only...
 (defn vecProduct [] 
 (weave_kernel! pp_spindle :vecProduct 
@@ -244,6 +360,7 @@ else {
 (read_buf pp_spindle @correct_answer_buf)  ;;The answer for the one buf (given the input data at this time
 (read_buf pp_spindle pp_answer_buf)
 
+;;;;;;;;;;DOEN REWRITE TO HERE
 (defn reduceToPP []
 (weave_kernel! pp_spindle :reduceToPP
                           number_of_pps ;;global size, here total number of perceptrons, here just one
@@ -405,8 +522,7 @@ else {
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
-
+)
 
 
 
@@ -456,6 +572,8 @@ else {
 )
 
 
+
+(quote
 (count (read_buf pp_spindle @input_data_buf_atom))
 (first (read_buf pp_spindle @input_data_buf_atom))
 
@@ -473,7 +591,7 @@ else {
 
 
 
-(quote
+
 
   dfsfsd ert e
   
