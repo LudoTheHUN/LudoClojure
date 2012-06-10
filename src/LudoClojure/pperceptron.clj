@@ -181,19 +181,25 @@ else {
   API functions to wrap over pp
 
   
-  (defn make_pp [opencl_env input_size outputs_size pp_size] (atom ...))
+  (defn make_pp [opencl_env input_size outputs_size pp_size] {...buffers (atom of configs)})
         ;; sets up all buffers, default config)
-  (defn update_pp_config [pp {of options }] (swap! pp))   ;; to update learning rates etc...)
-  (defn train_pp (pp in_vec, correct_answer_vec))
-  (defn readout_pp (pp in_vec, answer_vec))
+  (defn update_pp_config [pp {of options }] (swap! pp))   ;; to update learning rates etc...)  ;; meta learning functionality here, eg: to optimise learning rate etc?
+  (defn train_pp!   (pp in_vec correct_answer_vec))   ;my need to expose openCL queue ; my wish to pass in buffers for speed, ie: have fast version of these where queue and nonCL buffers are passed in,.. or even target openCL buffers (comes in under openCL interoprility) 
+  (defn readout_pp! (pp in_vec answer_vec))
+  (defn train_examples [pp, traincycles, vec of in_vecs, vec of correct_answer_vecs] trains pp for n staps, emit assesment of accuracy)
+  
+  
+  ;;correct clFinish in to be done by user 
   
   ;;assume pp is first of a famility of interoperabable openCL entities, need to set up prototype intefaces between them.
+  ;will need to talk at openCL buffer level if possible (eg: one pp passing value to another, liquid to pp passing)... aim for aritrary graph between openCL entities
+  ;ie: have funs that take a pp and hook in input from other openCL object, amit to other openCL object....
+  
+  ;;Learn defprotocol, defrecord, defmethod etc.... try to use them here...
     )
   
   ;;Assume a single openCL env? Needs to know sizes of pp
-  
-  
-  )
+
 
 ;opencl_env
 ;testing kernel compilation 
