@@ -3,7 +3,7 @@
   <classpathentry kind="src" path="src"/>
   <classpathentry kind="src" path="test"/>
   <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-  <classpathentry kind="lib" path="lib/calx-0.4.0-20120603.211704-1.jar"/>
+  <classpathentry kind="lib" path="lib/calx-0.4.1-20120612.223123-1.jar"/>
   <classpathentry kind="lib" path="lib/clojure-1.4.0.jar"/>
   <classpathentry kind="lib" path="lib/clojure-contrib-1.2.0.jar"/>
   <classpathentry kind="lib" path="lib/dev"/>

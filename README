@@ -43,6 +43,13 @@ Painfully discovered findings:
 -main function needs to be at the end of the 
 .../src/LudoClojure/core.clj   else everything breaks...
 
+Pushing to clojars:
+lein jar    ; create the package
+lein pom
+lein push   ;; will not work without authentication
+scp pom.xml calx-0.4.0-SNAPSHOT.jar clojars@clojars.org:
+
+
 
 ## BIG TODOs:
 Tool up!

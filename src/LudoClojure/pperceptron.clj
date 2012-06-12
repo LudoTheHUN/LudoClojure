@@ -188,7 +188,7 @@ else {
   (defn readout_pp! (pp in_vec answer_vec))
   (defn train_examples [pp, traincycles, vec of in_vecs, vec of correct_answer_vecs] trains pp for n staps, emit assesment of accuracy)
   
-  
+  ;;??!! What should the returns be for these... the pp, should be cheap to... sideeffect rampany however...?
   ;;correct clFinish in to be done by user 
   
   ;;assume pp is first of a famility of interoperabable openCL entities, need to set up prototype intefaces between them.
@@ -269,6 +269,13 @@ else {
                           pp_size
                           vecProductResult
                           pp_answer_buf))
+(defn reduceToPPq [q]
+(lg_enqueue-kernel q (:progs @opencl_env) 
+                          :reduceToPP
+                          number_of_pps ;;global size, here total number of perceptrons, here just one
+                          pp_size
+                          vecProductResult
+                          pp_answer_buf))
 
 @(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
 (reduceToPP)
@@ -306,10 +313,45 @@ else {
 
 @(lg_enqueue-read alpha (:queue @opencl_env))
 
+(opencl_env_addQueue opencl_env :queue2)
+
+(def event1 (vecProduct))
+(def event2 (reduceToPPq  (:queue @opencl_env)))
+
+(def event22 (reduceToPPq  (:queue2 @opencl_env)))
+(def event3 (flop_pp))
+
+(status event1)
+(status event2)
+(status event22)
+(status event3)
+
+(lg_enqueue-wait-for (:queue @opencl_env) event1 )
+(lg_enqueue-wait-for (:queue @opencl_env) event22 )
+(lg_enqueue-wait-for (:queue @opencl_env) event3 )
+
+(lg_enqueue-barrier (:queue @opencl_env))
+
+(def markerevet1 (lg_enqueue-marker (:queue @opencl_env)))
+(status markerevet1)
+(wait-for markerevet1)
+
+(lg_finish (:queue @opencl_env))
+
+;;; Set up a test showing that order of execution can be controlled with 
+;lg_enqueue-wait-for specific events across queues, by making second queue to get 
+;to a specific competion stage. Make it really easy to see the dependency graph.
+;Could make the whole flop mechanisim be based on directed acyclic dependency graph
+
+
+
+
 
 (vecProduct)
 (reduceToPP)
 (flop_pp)
+
+
 @(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
 
 @(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
@@ -330,6 +372,9 @@ else {
 (vecProduct)
 (reduceToPP)
 @(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
+
+
+
 
 
 
