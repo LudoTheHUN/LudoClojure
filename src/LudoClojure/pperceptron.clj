@@ -206,9 +206,8 @@ else {
 (opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
 
 
-
 ;see which kernel programs
-(:progs @opencl_env)
+(keys (:progs @opencl_env))
 
 
 ;(def my_openCL_buf4  (lg_create-buffer my_context 10 :int32-le))
@@ -311,6 +310,8 @@ else {
 
 (flop_pp)
 
+;;Target is, (flop_pp prior_event(can be nil for none) pp_object)   , emits  an event so that downstream can hook in to time order 
+
 @(lg_enqueue-read alpha (:queue @opencl_env))
 
 (opencl_env_addQueue opencl_env :queue2)
@@ -336,7 +337,7 @@ else {
 (status markerevet1)
 (wait-for markerevet1)
 
-(lg_finish (:queue @opencl_env))
+(time (lg_finish (:queue @opencl_env)))
 
 ;;; Set up a test showing that order of execution can be controlled with 
 ;lg_enqueue-wait-for specific events across queues, by making second queue to get 
@@ -375,6 +376,109 @@ else {
 
 
 
+;;Demoing safe,closed buffer operations
+(time 
+  (let [buf1        (lg_wrap (:context @opencl_env) [2.0] :float32-le)
+        local_queue (lg_create-queue (first (:devices @opencl_env)) (:context @opencl_env) )
+        add_one_event  (lg_enqueue-kernel local_queue (:progs @opencl_env) :addOneToFloat 1 buf1 buf1)
+        times_two_event (lg_enqueue-kernel local_queue (:progs @opencl_env) :timestwo 1 buf1 buf1)
+        add_one_event2  (lg_enqueue-kernel local_queue (:progs @opencl_env) :addOneToFloat 1 buf1 buf1)
+      ]
+  
+  @(lg_enqueue-read buf1 local_queue)
+))
 
+
+
+(let 
+
+(time (do 1 2))
+(def outtimecheck
+  (let [buf1        (lg_wrap (:context @opencl_env) [2.0] :float32-le)
+        local_queue (lg_create-queue (first (:devices @opencl_env)) (:context @opencl_env) )]
+    
+    (let [add_one_event  (lg_enqueue-kernel local_queue (:progs @opencl_env) :addOneToFloat 1 buf1 buf1)
+                add_one_event2  (lg_enqueue-kernel local_queue (:progs @opencl_env) :addOneToFloat 1 buf1 buf1)
+                times_two_event (lg_enqueue-kernel local_queue (:progs @opencl_env) :timestwo 1 buf1 buf1)]
+         (time @(lg_enqueue-read buf1 local_queue)))
+))
+
+
+(opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
+
+(time 
+  (let [buf1         (lg_wrap (:context @opencl_env) [0.0] :float32-le)
+        device       (first (:devices @opencl_env))
+        local_queue  (lg_create-queue device (:context @opencl_env) )
+        local_queue2 (lg_create-queue device (:context @opencl_env) )
+        add_one_event  (lg_enqueue-kernel local_queue2 (:progs @opencl_env) :addOneToFloat 1 buf1 buf1)
+        times_two_event (lg_enqueue-kernel local_queue (:progs @opencl_env) :timestwo 1 buf1 buf1)
+        waitfor_event   (lg_enqueue-wait-for local_queue2 times_two_event )
+        add_one_event2  (lg_enqueue-kernel local_queue2 (:progs @opencl_env) :addOneToFloat 1 buf1 buf1)
+
+      ]
+add_one_event2   ;;This is the point, without this wait we can read off witth add_one_event2 not being done yet
+;@(lg_enqueue-read buf1 local_queue)
+))
+
+;;It's super cheep to create an openCL queue. 
+(time (dotimes [n 100] 
+   (lg_create-queue (first (:devices @opencl_env)) (:context @opencl_env) )))
+
+;;;;; To wrap functionally, each set of actions needs to consume an array of openCL events to wait for
+;;and emit one event which will signal the end of this block's work.
+;Internall, each block mages whatever needs to happen (effectively hidden state), BUT
+;need to make sure that buffers touched, ie: passed in are not touched anywhere else (this is a state leak out of the function, via the buffers being statefull)
+;;need to be aware of which queue should have the wait-for event enqueued ....
+
+;; how can one fan out?
+
+;; The API (if it can be called that) will be based around each funcions that are made up potentailly of multiple openCL calls) having an interal queue.
+;; The function will return a dependency event that WILL HAVE TO BE respected by callers.
+;; Each function will accept an array of openCL events to depend on as first param + other params for itself.
+;; A helper function to consume the array and depend on event within it will be provided, it will have to be impelmented by anyone wishing to use API
+;; V2 Could have a macro to inject this depenency.
+
+;eg
+(defn doallpp [dep]
+  (let [d1  (do_pp dep config)
+        d2  (postpp1 d1)
+        d3  (portpp2 d1)
+        d4  (do4 [d2 d3] config)]
+   d4
+  ))
+;;call it with
+    (doallpp (doallpp (doallpp nil)))
+;;or use it among other dos for other entties
+
+;;Note that this is where the high level design would live for composite structures
+(defn doallstuff [dep]
+  (let [ppdone     (doallpp dep pp)
+        liqdobe    (doallliq dep liq)
+        donecopy   (copy_pp_to_liq [ppdone liqdobe] pp liq copyconfig)]
+     donecopy))
+
+;;Then run with soething like
+
+(loop [k 4 dep nil]
+        (println k) (println dep)
+        ;(doallstuff dep)
+        (if (= k 1) 
+            nil
+            (recur (dec k)  (doallstuff dep))))
+
+(defn returnlists [x y z]
+   (list x y z))
+(returnlists 1 2 '(1 2 3))
+
+(map (fn [x] (+ x 1 )) (concat [3 2 1 0] [6 5 4] [8]))
+
+
+
+(defn 
+                 
+                 
+                 
+                 
 
 
