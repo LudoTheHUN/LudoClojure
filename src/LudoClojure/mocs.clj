@@ -15,6 +15,122 @@
 
 ;((my_pp :init_pp!))
 
+(count [1])
+(count {:a :b :c :d})
+(first {:a :b :c :d})
+
+{:a :b} {:a {:b "foo"} :c "2"}
+(first [])
+
+(defn fix [spec data] 
+  (cond
+     (and (keyword? spec) (map? data))
+       (data spec)
+     (and (map? spec) (map? data))
+       (fix (spec (first (keys spec))) (data (first (keys spec))))
+     (and (vector? spec) (map? data))
+        nil
+     (and (vector? spec) (vector? data) (= nil (first spec)))
+        data
+     (and (vector? spec) (vector? data) (keyword? (first spec)))
+        (map (fn [d] (fix (first spec) d)) data)
+     (and (vector? spec) (vector? data) (map? (first spec)))
+        (map (fn [d] (fix (first spec) d)) data)
+     (and (map? spec) (list? data) (keyword? (first spec)))
+         :should_never_happen
+       ))
+
+
+(and
+(= (fix :a nil)                    nil)
+(= (fix :a 1)                      nil)
+(= (fix :a                     {:a {:b "foo"} :c "2"})                                  {:b "foo"})
+(= (fix {:a :b}                {:a {:b "foo"} :c "2"})                                  "foo")
+(= (fix {:a {:b :c}}           {:a {:b {:c 45}} :c "2"})                                 45)
+(= (fix {:a {:b :c}}           {:a {:b {:c [45 "foo"]}} :c "2"})                        [45 "foo"])
+(= (fix {:a [:b]}              {:a [{:b 45 :d 5} {:c 46} {:b 46} :foo1 "foo2" 55] :c "2"})   '(45 nil 46 nil nil nil))
+(= (fix {:a {:c [:b]}}         {:a {:c [{:b 45 :d 5} {:c 46} {:b 46} :foo1 "foo2" 55]} :c "2"})   '(45 nil 46 nil nil nil))
+(= (fix {:a {:c [:b]}}         {:a {:c [{:b 45 :d 5} {:c 46} {:b 46} :foo1 "foo2" 55]} :c "2"})   '(45 nil 46 nil nil nil))
+(= (fix {:a {:c [:b]}}         {:a {:c [{:b 45 :d 5} {:c 46} {:b {:e "bingo"}} :foo1 "foo2" 55]} :c "2"})  '(45 nil {:e "bingo"} nil nil nil))
+(= (fix {:a {:c [{:b :e}]}}    {:a {:c [{:b 45 :d 5} {:c 46} {:b {:e "bingo"}} :foo1 "foo2" 55]} :c "2"})   '(nil nil "bingo" nil nil nil))
+(= (fix {:a {:c [{:b {:e :f}}]}}    {:a {:c [{:b 45 :d 5} {:c 46} {:b {:e {:f :boo}}} :foo1 "foo2" 55]} :c "2"})                    '(nil nil :boo nil nil nil))
+(= (fix {:a {:c [{:b {:e [:f]}}]}}    {:a {:c [{:b 45 :d 5} {:c 46} {:b {:e [{:f :boo}  {:f :qoo} {} "foo"]}} :foo1 "foo2" 55]} :c "2"})  '(nil nil (:boo :qoo nil nil) nil nil nil))
+(= (fix {:a {:c [{:b {:e [:f]}}]}}    {:a {:c [{:b {:e [{:f :boo}]} :d 5} {:c 46} {:b {:e [{:f :boo}  {:f :qoo} {} "foo"]}} :foo1 "foo2" 55]} :c "2"})  '((:boo) nil (:boo :qoo nil nil) nil nil nil))
+(= (fix {:a {:c [{:b [:f]}]}}    {:a {:c [{:b {:e [{:f :boo}]} :d 5} {:c 46} {:b [{:f :boo}  {:f :qoo} {} "foo"]} :foo1 "foo2" 55]} :c "2"})  '(nil nil (:boo :qoo nil nil) nil nil nil))
+(= (fix {:a {:c [{:b []}]}}    {:a {:c [{:b {:e [{:f :boo}]} :d 5} {:c 46} {:b [{:f :boo}  {:f :qoo} {} "foo"]} :foo1 "foo2" 55]} :c "2"})  '(nil nil (:boo :qoo nil nil) nil nil nil))
+(= (fix {:a []}  {:a [:c 55] :c "2"})  [:c 55])
+)
+
+(defn ofix [ospec data]
+  (cond
+    (and (nil? ospec) (list? data))
+       (vec (map (fn[d] (ofix nil d)) data ))
+    (nil? ospec)
+      data
+    (nil? data)    ;;?
+        nil            ;;?
+    (and (vector? ospec) (list? data) (= nil (first ospec)))
+        ::vecspecfail
+    (and (vector? ospec) (list? data) (keyword? (first ospec)))
+          (vec (map (fn[d] (ofix (first ospec) d)) data))
+    (and (vector? ospec) (list? data) (map? (first ospec)))
+          (vec (map (fn[d] {(first (keys (first ospec))) (ofix ((first ospec) (first (keys (first ospec)))) d)}) data))
+          
+    (and (vector? ospec) (not (list? data)) (keyword? (first ospec)))
+          nil
+    (and (vector? ospec) (not (list? data)) (map? (first ospec)))
+          nil
+    (and (keyword? ospec) (list? data))
+       {ospec (vec (map (fn [d] (ofix nil d)) data )) }
+    (keyword? ospec)
+       {ospec data}
+    (and (map? ospec) (list? data))
+       {(first (keys ospec)) (ofix (ospec (first (keys ospec)))  data)}
+    (map? ospec)
+       {(first (keys ospec)) (ofix (ospec (first (keys ospec)))  data)}
+       
+     :else
+       :epicfail
+  ))
+
+(= (ofix :a nil)                         nil)
+(= (ofix :a "hi")                        {:a "hi"})
+(= (ofix {:a :b} "hi")                   {:a {:b "hi"}})
+(= (ofix {:a {:b :c}} "hi")              {:a {:b {:c "hi"}}})
+(= (ofix {:a {:b :c}} {:f :g})           {:a {:b {:c {:f :g}}}})
+(= (ofix :a '(21 "hi"))                  {:a [21 "hi"]})
+(= (ofix :a '(21 ("hi" 42) 31))          {:a [21 ["hi" 42] 31]})
+(= (ofix {:a :b} '(21 nil "hi"))         {:a {:b [21 nil "hi"]}})
+(= (ofix {:a :b} '(21 ("hi" 42) "hi"))   {:a {:b [21 ["hi" 42] "hi"]}})
+(= (ofix :a '(21 nil "hi"))              {:a [21 nil "hi"]})
+(= (ofix {:a [:b]} '(21 nil "hi"))       {:a [{:b 21} nil {:b "hi"}]})
+(= (ofix {:a [{:b :c}]} '(21 nil "hi"))  {:a [{:b {:c 21}} {:b nil} {:b {:c "hi"}}]})
+
+(= (ofix {:a [{:b {:c [:d]}}]} '(21 nil "hi"))    {:a [{:b {:c 21}} {:b nil} {:b {:c "hi"}}]})
+(= (ofix {:a [{:b {:c [:d]}}]} '((21) "boo" ("hi" "fii")))  {:a [{:b {:c [{:d 21}]}} {:b nil} {:b {:c nil}}]})
+
+(=  (ofix {:a [{:b {:c [{:d :e}]}}]} '((21) "boo" ("hi" "fii")))  {:a [{:b {:c [{:d {:e 21}}]}} {:b {:c nil}} {:b {:c [{:d {:e "hi"}} {:d {:e "fii"}}]}}]})
+(=  (ofix {:a [{:d :e}]} '(21 "boo" ("hi2") "fii")) :?)  ;;?
+
+
+(defn gconj [orig data]
+
+)
+
+
+(gconj {:a 4} {:a 5})  {:a 5}
+
+
+
+
+
+(vec '(1 2 3))
+      
+(class {})
+(class (hash-map))
+
+
+
 
 (def a (atom 10000000))
 (time (while (pos? @a) (do (swap! a dec))))

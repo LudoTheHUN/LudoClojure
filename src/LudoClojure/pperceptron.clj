@@ -183,10 +183,15 @@ else {
   
   (defn make_pp [opencl_env input_size outputs_size pp_size] {...buffers (atom of configs)})
         ;; sets up all buffers, default config)
-  (defn update_pp_config [pp {of options }] (swap! pp))   ;; to update learning rates etc...)  ;; meta learning functionality here, eg: to optimise learning rate etc?
+  (defn update_pp_config [pp {of options }] (swap! pp ..))   ;; to update learning rates etc...)  ;; meta learning functionality here, eg: to optimise learning rate etc?
   (defn train_pp!   (pp in_vec correct_answer_vec))   ;my need to expose openCL queue ; my wish to pass in buffers for speed, ie: have fast version of these where queue and nonCL buffers are passed in,.. or even target openCL buffers (comes in under openCL interoprility) 
   (defn readout_pp! (pp in_vec answer_vec))
   (defn train_examples [pp, traincycles, vec of in_vecs, vec of correct_answer_vecs] trains pp for n staps, emit assesment of accuracy)
+  
+  ;;;;;TODO
+  ;;Make these functions of pp being made, eg: ((pp :train) [vecin] [vecout])  ...rifle style
+  ;;This removes the need for the pp to be passed in each time for helper function definitions... object is the persistant clojure...
+  
   
   ;;??!! What should the returns be for these... the pp, should be cheap to... sideeffect rampany however...?
   ;;correct clFinish in to be done by user 
@@ -288,6 +293,7 @@ else {
 (def mu            (float 0.5 )) ;;  learning modifier around zero
 
 
+
 (defn flop_pp [] (lg_enqueue-kernel (:queue @opencl_env) (:progs @opencl_env) 
                           :updateAlphas
                           (* pp_size number_of_pps)        ;global size, here number of perceptrons in the one pp * number_of_pps
@@ -375,6 +381,17 @@ else {
 @(lg_enqueue-read pp_answer_buf (:queue @opencl_env))
 
 
+(time (def largearray (make_random_float_array 100 1.0 3)))  ;120ms
+(time (def largebuff (lg_wrap (:context @opencl_env) largearray :float32-le)))   ;37ms
+(time (def overwrtiewith  (to-buffer  largearray :float32-le)))     ;35ms
+(time (lg_enqueue-overwrite largebuff [-100 0] overwrtiewith (:queue @opencl_env)))               ;2ms
+(time (def mmarker (lg_enqueue-marker (:queue @opencl_env))))
+(time (status mmarker))
+(def readrandom (time @(lg_enqueue-read largebuff (:queue @opencl_env))))
+(time (lg_finish (:queue @opencl_env)))
+(first readrandom)
+
+
 
 ;;Demoing safe,closed buffer operations
 (time 
@@ -390,7 +407,6 @@ else {
 
 
 
-(let 
 
 (time (do 1 2))
 (def outtimecheck
@@ -426,7 +442,7 @@ add_one_event2   ;;This is the point, without this wait we can read off witth ad
    (lg_create-queue (first (:devices @opencl_env)) (:context @opencl_env) )))
 
 ;;;;; To wrap functionally, each set of actions needs to consume an array of openCL events to wait for
-;;and emit one event which will signal the end of this block's work.
+;;and emit one event which will signal the end of this functions work. Note that events will be enqued on openCL queues only, execution will be done later...
 ;Internall, each block mages whatever needs to happen (effectively hidden state), BUT
 ;need to make sure that buffers touched, ie: passed in are not touched anywhere else (this is a state leak out of the function, via the buffers being statefull)
 ;;need to be aware of which queue should have the wait-for event enqueued ....
@@ -440,6 +456,18 @@ add_one_event2   ;;This is the point, without this wait we can read off witth ad
 ;; V2 Could have a macro to inject this depenency.
 
 ;eg
+(defn do_pp [dep config]
+    (let [local_q (lg_create-queue (first (:devices @opencl_env)) (:context @opencl_env) )
+          deps    (lg_enqueue-wait-for local_q dep)]
+          deps))
+;;;TODO!! create support function that will return a queue . take an openCL_env and array(or singular or list) of dependency event, sets up them as dependencies on the queue
+(do_pp (reduceToPP) 1)
+
+
+
+
+(quote
+
 (defn doallpp [dep]
   (let [d1  (do_pp dep config)
         d2  (postpp1 d1)
@@ -474,11 +502,6 @@ add_one_event2   ;;This is the point, without this wait we can read off witth ad
 (map (fn [x] (+ x 1 )) (concat [3 2 1 0] [6 5 4] [8]))
 
 
-
-(defn 
-                 
-                 
-                 
-                 
+)
 
 

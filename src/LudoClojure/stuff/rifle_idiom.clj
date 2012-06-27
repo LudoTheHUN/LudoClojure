@@ -1,8 +1,6 @@
 (ns LudoClojure.rifle-idiom)
 
 
-
-
 ;;TODO see if this rifle idiom will do it for me....
 ;;This demonstrates an functional objectiviation over an atom, keeping its state. This is a closure (??) , but only if the atom is never exposed directly
 
