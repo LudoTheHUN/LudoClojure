@@ -64,6 +64,7 @@ vecProductResult[gid] = total;
      :body "
 __kernel void reduceToPP(
     const int pp_size,
+    const int rho,
     __global float *vecProductResult,
     __global float *pp_answer_buf
     )
@@ -84,7 +85,18 @@ int gid = get_global_id(0);
             total += -1.0;
              }
   }
-pp_answer_buf[gid] = total / pp_size;  //Different squashing functions could be implemente here, eg: binary 1,-1   devide by pp_size is actually incorrect.
+//OLD Implementatioon    pp_answer_buf[gid] = total / pp_size;  //Different squashing functions could be implemente here, eg: binary 1,-1   devide by pp_size is actually incorrect.
+// TODO rho goes here
+if (total < -rho) {  
+    pp_answer_buf[gid] = -1.0;
+    }
+else if (total > rho) {  
+    pp_answer_buf[gid] = +1.0;
+    }
+else {
+    pp_answer_buf[gid] = total / rho ;
+   }
+
 }
 "
 }
@@ -107,8 +119,7 @@ __kernel void updateAlphas(
     __global float *vecProductResult,
     __global float *pp_answer_buf,
     __global float *correct_answer_buf,
-    __global float *alpha,
-    __global int *debug_buff_int
+    __global float *alpha
     )
 {
 
@@ -175,6 +186,116 @@ else {
 "
 }})
 
+;;Compile openCL kernels into the opencl environment
+(opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
+
+
+(defn make_pp [opencl_env  input_size  outputs_size  pp_size rho]
+  (let [size_of_alpha_needed (* input_size pp_size outputs_size)
+        input_data_buf       (lg_create-buffer (:context @opencl_env) input_size :float32-le)
+        alpha_buf            (lg_wrap (:context @opencl_env) (make_random_float_array size_of_alpha_needed -0.5 1) :float32-le)
+        vecProductResult_buf (lg_create-buffer (:context @opencl_env) pp_size :float32-le)
+        correct_answer_buf   (lg_create-buffer (:context @opencl_env) outputs_size :float32-le)
+        pp_answer_buf        (lg_create-buffer (:context @opencl_env) outputs_size :float32-le)
+        ]
+
+  {:alpha_buf            alpha_buf
+   :input_data_buf       input_data_buf
+   :vecProductResult_buf vecProductResult_buf
+   :correct_answer_buf   correct_answer_buf
+   :pp_answer_buf pp_answer_buf
+   :opencl_env opencl_env
+   
+   :input_size input_size
+   :outputs_size outputs_size
+   :pp_size pp_size
+   
+   :eta           (float 0.01)  ;;  learning_rate
+   :gama          (float 0.05)  ;;  margin around zero
+   :epsilon       (float 0.1) ;;  level of error that is allowed.
+   :mu            (float 0.5 )  ;;  learning modifier around zero
+   :rho           rho           ;;  accuracy to which pp should learn, 1 means give back a binary output  
+   }
+  ))
+
+(defn pp_vecproduct [pp]
+  (lg_enqueue-kernel (:queue @(:opencl_env pp)) (:progs @(:opencl_env pp))
+      :vecProduct  (* (:pp_size pp) (:outputs_size pp))    ;;global size, here number of perceptrons in the one pp
+                          (:input_size pp)  ;;inluding the bias term
+                          (:input_data_buf pp)
+                          (:alpha_buf pp)    ;;should be 
+                          (:vecProductResult_buf pp)))
+
+
+(defn reduceToPP [pp]
+  (lg_enqueue-kernel (:queue @(:opencl_env pp)) (:progs @(:opencl_env pp))
+                          :reduceToPP
+                          (:outputs_size pp) ;;global size, here total number of perceptrons, here just one
+                          (:pp_size pp)
+                          (:rho  pp)
+                          (:vecProductResult_buf pp)
+                          (:pp_answer_buf pp)))
+
+
+(defn flop_pp [pp] 
+  (lg_enqueue-kernel (:queue @(:opencl_env pp)) (:progs @(:opencl_env pp))
+                          :updateAlphas
+                          (* (:pp_size pp) (:outputs_size pp))        ;global size, here number of perceptrons in the one pp * number_of_pps
+                          (:outputs_size pp)     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
+                          (:pp_size pp)
+                          (:input_size pp)          ;will be looping using this parameter to update all alphas
+                          (:eta pp)
+                          (:gama pp)
+                          (:epsilon pp)
+                          (:mu pp)
+                          (:input_data_buf pp)
+                          (:vecProductResult_buf pp)
+                          (:pp_answer_buf pp)
+                          (:correct_answer_buf pp)
+                          (:alpha_buf pp)
+                              ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
+                          ))
+
+(defn pp_write_input [pp data_float_vec ]
+  ;;TODO add check for size to be as expects
+       (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) (:queue @(:opencl_env pp)))
+  ;;TODO return an event
+  )
+
+(defn pp_write_correct_answer [pp data_float_vec ]
+  ;;TODO add check for size to be as expects
+       (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) (:queue @(:opencl_env pp)))
+  ;;TODO return an event
+  )
+
+
+
+(quote do stuff to a pp
+
+(def pp1 (make_pp opencl_env  3 1 10 4))
+@(lg_enqueue-read (pp1 :input_data_buf) (:queue @opencl_env))
+@(lg_enqueue-read (pp1 :correct_answer_buf) (:queue @opencl_env))
+@(lg_enqueue-read (pp1 :vecProductResult_buf) (:queue @opencl_env))
+@(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env))
+@(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env))
+
+(time (dotimes [n 1000] 
+(pp_vecproduct pp1)
+(reduceToPP pp1)
+(flop_pp pp1)
+(println @(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env)) ); @(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env)) )
+;(println @(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env))  @(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env)) )
+))
+
+
+(pp_write_input pp1 [ 1.0 1.0 -1.0 0.0 -1.0])
+(pp_write_correct_answer pp1 [0.2 -0.4])
+
+(lg_finish (:queue @opencl_env))
+
+
+
+)
 
 (quote
   TODO
@@ -208,7 +329,10 @@ else {
 
 ;opencl_env
 ;testing kernel compilation 
-(opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
+
+
+
+
 
 
 ;see which kernel programs
@@ -217,6 +341,9 @@ else {
 
 ;(def my_openCL_buf4  (lg_create-buffer my_context 10 :int32-le))
 ;(lg_wrap my_context [5.0 5.2 5.3] :float32-le)
+
+
+
 
 
 
@@ -252,6 +379,15 @@ else {
 (def number_of_pps (buf_elements @correct_answer_buf))
 
 
+
+
+
+
+
+
+
+(time (lg_finish (:queue @opencl_env)))
+
 (defn vecProduct []
   (lg_enqueue-kernel (:queue @opencl_env) (:progs @opencl_env)
       :vecProduct  (* pp_size number_of_pps)    ;;global size, here number of perceptrons in the one pp
@@ -271,6 +407,7 @@ else {
                           :reduceToPP
                           number_of_pps ;;global size, here total number of perceptrons, here just one
                           pp_size
+                          10 ;rho
                           vecProductResult
                           pp_answer_buf))
 (defn reduceToPPq [q]
@@ -278,6 +415,7 @@ else {
                           :reduceToPP
                           number_of_pps ;;global size, here total number of perceptrons, here just one
                           pp_size
+                          10 ;rho
                           vecProductResult
                           pp_answer_buf))
 
@@ -293,7 +431,7 @@ else {
 (def mu            (float 0.5 )) ;;  learning modifier around zero
 
 
-
+(quote
 (defn flop_pp [] (lg_enqueue-kernel (:queue @opencl_env) (:progs @opencl_env) 
                           :updateAlphas
                           (* pp_size number_of_pps)        ;global size, here number of perceptrons in the one pp * number_of_pps
@@ -314,7 +452,7 @@ else {
                           ))
 
 
-(flop_pp)
+(flop_pp) 
 
 ;;Target is, (flop_pp prior_event(can be nil for none) pp_object)   , emits  an event so that downstream can hook in to time order 
 
@@ -504,4 +642,6 @@ add_one_event2   ;;This is the point, without this wait we can read off witth ad
 
 )
 
+
+)
 
