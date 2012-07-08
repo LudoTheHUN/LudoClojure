@@ -148,41 +148,45 @@ for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
          alpha_norm_squared +=  (alphapart * alphapart);
        }
-float alpha_norm_squared_adjustment  = (alpha_norm_squared - 1.0) * eta;      //
+float alpha_norm_squared_adjustment  = convert_float_rtz( (alpha_norm_squared - 1.0) * eta );      //
 
 
 
 if ((pp_answer > upper_correct) && (vProductResult >= 0.0)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta);
+         alpha[perceptronid + k] =  convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta) );
        }
 }
 else if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta);
+         alpha[perceptronid + k] = convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta) );
        }
 }
 //Here we Stabilizing the outputs around zero
 else if ((pp_answer <= upper_correct) && (0.0 <= vProductResult) && (vProductResult < gama)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta * mu);
+         alpha[perceptronid + k] = convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta * mu) );
        }
 }
 else if ((pp_answer >= lower_correct) && (vProductResult < 0)    && (-gama < vProductResult)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta * mu);
+
+        alpha[perceptronid + k] = convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta * mu)  );
+
        }
 }
 else {
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] =  alphapart - (alpha_norm_squared_adjustment * alphapart);
+         alpha[perceptronid + k] =  convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) );
        }
 }
+
+
 }
 "
 }})
@@ -203,7 +207,7 @@ else {
                  rho 1
                  eta (float 0.001)
                  gama (float 0.4)
-                 epsilon (float 0.03)
+                 epsilon (float 0.0499)
                  mu (float 0.9 )}} options
         size_of_alpha_needed (* input_size pp_size outputs_size)
         input_data_buf       (lg_create-buffer (:context @opencl_env) input_size :float32-le)
@@ -218,7 +222,9 @@ else {
    :vecProductResult_buf vecProductResult_buf
    :correct_answer_buf   correct_answer_buf
    :pp_answer_buf pp_answer_buf
-   :opencl_env opencl_env
+   :pp_opencl_env opencl_env
+   :pp_queue :queue
+   
    
    :input_size input_size
    :outputs_size outputs_size
@@ -234,7 +240,7 @@ else {
 
 (defn pp_vecproduct [pp]
   "Part one stage of compoutig a pp answer. Takes input data that and alphas and does a vector product over them"
-  (lg_enqueue-kernel (:queue @(:opencl_env pp)) (:progs @(:opencl_env pp))
+  (lg_enqueue-kernel ((pp :pp_queue) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
       :vecProduct  (* (:pp_size pp) (:outputs_size pp))    ;;global size, here number of perceptrons in the one pp
                           (:input_size pp)  ;;inluding the bias term
                           (:input_data_buf pp)
@@ -242,10 +248,10 @@ else {
                           (:vecProductResult_buf pp)))
 
 
-(defn reduceToPP [pp]
+(defn pp_reduceToPP [pp]
   "Part two takes the vector products result and adds it up for each pp, giving an integer which is the pp answer, this is scaled 
 down to between -1.0 and 1.0"
-  (lg_enqueue-kernel (:queue @(:opencl_env pp)) (:progs @(:opencl_env pp))
+  (lg_enqueue-kernel ((pp :pp_queue) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
                           :reduceToPP
                           (:outputs_size pp) ;;global size, here total number of perceptrons, here just one
                           (:pp_size pp)
@@ -254,9 +260,9 @@ down to between -1.0 and 1.0"
                           (:pp_answer_buf pp)))
 
 
-(defn flop_pp [pp]
+(defn pp_updateAlphas [pp]
  "The 3rd stage does the learning by updating the alphas vector by considering the correct answer provided and the answer given by the current pp"
-  (lg_enqueue-kernel (:queue @(:opencl_env pp)) (:progs @(:opencl_env pp))
+  (lg_enqueue-kernel ((pp :pp_queue) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
                           :updateAlphas
                           (* (:pp_size pp) (:outputs_size pp))        ;global size, here number of perceptrons in the one pp * number_of_pps
                           (:outputs_size pp)     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
@@ -276,51 +282,90 @@ down to between -1.0 and 1.0"
 
 (defn pp_write_input [pp data_float_vec ]
   ;;TODO add check for size to be as expects
-       (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) (:queue @(:opencl_env pp)))
+       (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
   ;;TODO return an event
   )
 
 (defn pp_write_correct_answer [pp data_float_vec ]
   ;;TODO add check for size to be as expects
-       (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) (:queue @(:opencl_env pp)))
+       (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
   ;;TODO return an event
   )
 
+(defn pp_readout [pp buffername]
+  @(lg_enqueue-read (pp buffername) ((pp :pp_queue) @(:pp_opencl_env pp))))
 
 
-(quote do stuff to a pp
+(defn pp_train_and_answer [pp input output & options]
+  (pp_write_input pp input)
+  (pp_write_correct_answer pp output)
+  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
+  (pp_vecproduct pp)
+  (pp_reduceToPP  pp)
+  (pp_updateAlphas  (conj pp (first options)))
+  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
+  (pp_readout pp :pp_answer_buf)
+
+  )
 
 
-(def pp1 (make_pp {:input_size 10
-                   :outputs_size 21
+(quote do some stuff to a pp
+
+
+(def pp1 (make_pp {:input_size 40
+                   
+                   :outputs_size 30
                    :pp_size 30
                    :rho 20                   ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
-                   :eta (float 0.0001)       ;;  learning_rate
-                   :gama (float 0.4)        ;;  margin around zero              ;0.4
-                   :epsilon (float 0.01)    ;;  level of error that is allowed.
-                   :mu (float 0.9 )}))      ;;  learning modifier around zero   ;0.9
-
-@(lg_enqueue-read (pp1 :input_data_buf) (:queue @opencl_env))
-@(lg_enqueue-read (pp1 :correct_answer_buf) (:queue @opencl_env))
-@(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env))
-;  @(lg_enqueue-read (pp1 :vecProductResult_buf) (:queue @opencl_env))
-;  @(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env))
-
-(pp_write_input pp1 [1.0 -1.0 -0.1 1.0 -1.0])
-(pp_write_correct_answer pp1 [-1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0])
-;(pp_write_correct_answer pp1 [1.0 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0.0 -0.1 -0.2 -0.3 -0.4 -0.5 -0.6 -0.7 -0.8 -0.9 -1.0])
-;(pp_write_correct_answer pp1 [-0.7 0.512 -1.0 1.0 -1.0 1.0 -1.0 1.0 -1.0 1.0 -1.0 1.0 -1.0 1.0 -1.0 1.0 -1.0 1.0 -1.0 1.0 -1.0])
+                   :eta (float 0.001)        ;;  learning_rate
+                   :gama (float 0.4)         ;;  margin around zero              ;0.4
+                   :epsilon (float 0.049)    ;;  level of error that is allowed.
+                   :mu (float 0.9 )}))       ;;  learning modifier around zero   ;0.9
 
 
-(time (dotimes [n 200] 
-(pp_vecproduct pp1)
-(reduceToPP pp1)
-(flop_pp pp1)
-(if (= 0 (mod n 1))
-(println n @(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env))  ); @(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env)) )
+
+
+(pp_readout pp1 :input_data_buf)
+(pp_readout pp1 :correct_answer_buf)
+(pp_readout pp1 :pp_answer_buf)
+;(count (pp_readout pp1 :vecProductResult_buf))
+;(count 
+  ;(pp_readout pp1 :alpha_buf)
+  ;)
+
+
+(time (dotimes [n 1000]
+  (if (= 0 (mod n 1))
+  (println n
+(reduce + (map (fn [x y](if (= x y) 0 1))
+(pp_readout pp1 :correct_answer_buf)
+(pp_train_and_answer pp1 [0.0 0.0 0.0 0.0 -1.0] [-1.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.3) :eta (float 0.00001)  })
 )
-;(println @(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env))  @(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env)) )
-))
+ ))
+  :done)))
+
+
+
+
+
+(let [x [1 2 3]
+      y [2 2 2]]
+  (map (fn [x y](= x y)) x y))
+
+
+(pp_write_input pp1 [-1.0 0.0 1.0 0.0 -1.0])
+(pp_write_correct_answer pp1 [-1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0])
+(pp_vecproduct pp1)
+(pp_reduceToPP  pp1 )
+(pp_updateAlphas  (conj pp1 {:gama (float 0.3) :eta (float 0.00001)  }))
+(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+
+
+;(println @(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env))) ; @(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env)) )
+;;TODO keep meta data about accuracy to slow down learning rate as more answers become correct.. but that means reading the answer, which is relatively slow and a global... much better the 
+;;assessing learning rate per each pp. 
+
+
 ;[-1.0 -0.093 -1.0]
 ;[-1.0 1.0 -1.0]
 ;[-1.0 -0.101 -1.0]
@@ -331,6 +376,7 @@ down to between -1.0 and 1.0"
 
 
 )
+
 
 (quote
   TODO
@@ -364,6 +410,26 @@ down to between -1.0 and 1.0"
 
 ;opencl_env
 ;testing kernel compilation 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
