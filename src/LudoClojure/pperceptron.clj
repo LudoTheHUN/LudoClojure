@@ -53,7 +53,13 @@ int gid = get_global_id(0);
   for(int k=0; k<input_size; k++) {
        total += alpha[gid * input_size + k] * input_data[k];
   }
-vecProductResult[gid] = total;
+  
+if( isnan(total) == 1 || fabs(total) < 1.0E-30 ) {
+      vecProductResult[gid] = 0.0;
+     }
+    else {
+      vecProductResult[gid] =  total;
+    }
 }
 
   "
@@ -151,42 +157,70 @@ for(int k=0; k<input_size; k++) {
 float alpha_norm_squared_adjustment  = convert_float_rtz( (alpha_norm_squared - 1.0) * eta );      //
 
 
-
+float alpha_prewrite = 0.0;
 if ((pp_answer > upper_correct) && (vProductResult >= 0.0)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] =  convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta) );
+         alpha_prewrite =  alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta);
+                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
+                       alpha[perceptronid + k] = 0.0;
+                      }
+                 else {
+                       alpha[perceptronid + k] =  alpha_prewrite;
+                       }
        }
 }
 else if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] = convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta) );
+         alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta);
+                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
+                       alpha[perceptronid + k] = 0.0;
+                      }
+                 else {
+                       alpha[perceptronid + k] =  alpha_prewrite;
+                       }
        }
 }
 //Here we Stabilizing the outputs around zero
 else if ((pp_answer <= upper_correct) && (0.0 <= vProductResult) && (vProductResult < gama)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] = convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta * mu) );
+         alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta * mu) ;
+                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
+                       alpha[perceptronid + k] = 0.0;
+                      }
+                 else {
+                       alpha[perceptronid + k] =  alpha_prewrite;
+                       }
        }
 }
-else if ((pp_answer >= lower_correct) && (vProductResult < 0)    && (-gama < vProductResult)){
+else if ((pp_answer >= lower_correct) && (vProductResult < 0.0)    && (-gama < vProductResult)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
 
-        alpha[perceptronid + k] = convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta * mu)  );
-
+         alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta * mu) ;
+                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
+                       alpha[perceptronid + k] = 0.0;
+                      }
+                 else {
+                       alpha[perceptronid + k] =  alpha_prewrite;
+                       }
        }
 }
 else {
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
-         alpha[perceptronid + k] =  convert_float_rtz( alphapart - (alpha_norm_squared_adjustment * alphapart) );
+
+         alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) ;
+                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30 ) {
+                       alpha[perceptronid + k] = 0.0;
+                      }
+                 else {
+                       alpha[perceptronid + k] =  alpha_prewrite;
+                       }
        }
 }
-
-
 }
 "
 }})
@@ -297,6 +331,8 @@ down to between -1.0 and 1.0"
 
 
 (defn pp_train_and_answer [pp input output & options]
+ (do
+  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_write_input pp input)
   (pp_write_correct_answer pp output)
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
@@ -306,12 +342,21 @@ down to between -1.0 and 1.0"
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_readout pp :pp_answer_buf)
 
-  )
+  ))
+
+(defn pp_answer [pp input]
+ (do
+  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
+  (pp_write_input pp input)
+  (pp_vecproduct pp)
+  (pp_reduceToPP  pp)
+  (pp_readout pp :pp_answer_buf)
+  ))
 
 
 (quote do some stuff to a pp
 
-
+;;;stress test
 (def pp1 (make_pp {:input_size 40
                    
                    :outputs_size 30
@@ -328,7 +373,7 @@ down to between -1.0 and 1.0"
 (pp_readout pp1 :input_data_buf)
 (pp_readout pp1 :correct_answer_buf)
 (pp_readout pp1 :pp_answer_buf)
-;(count (pp_readout pp1 :vecProductResult_buf))
+(pp_readout pp1 :vecProductResult_buf)
 ;(count 
   ;(pp_readout pp1 :alpha_buf)
   ;)
@@ -337,12 +382,111 @@ down to between -1.0 and 1.0"
 (time (dotimes [n 1000]
   (if (= 0 (mod n 1))
   (println n
-(reduce + (map (fn [x y](if (= x y) 0 1))
-(pp_readout pp1 :correct_answer_buf)
-(pp_train_and_answer pp1 [0.0 0.0 0.0 0.0 -1.0] [-1.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.3) :eta (float 0.00001)  })
-)
- ))
+
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_readout pp1 :correct_answer_buf)
+  (pp_train_and_answer pp1 [1.0 1.0 1.0 1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
+  ))
+  
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_readout pp1 :correct_answer_buf)
+  (pp_train_and_answer pp1 [0.0 0.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
+  ))
+  
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_readout pp1 :correct_answer_buf)
+  (pp_train_and_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
+  ))
+  
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_readout pp1 :correct_answer_buf)
+  (pp_train_and_answer pp1 [0.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
+  ))
+  
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_readout pp1 :correct_answer_buf)
+  (pp_train_and_answer pp1 [-1.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
+  ))
+  (pp_readout pp1 :pp_answer_buf)
+  
+  )
+  
   :done)))
+
+(dotimes [n 40]
+  (println (/ (- n 20) 20.0)  (pp_answer pp1 [(/ (- n 20) 10.0) 0.5 0.0 0.0 -1.0]))
+)
+
+
+
+
+
+
+;;;binary results test
+(def pp2 (make_pp {:input_size 5
+                   
+                   :outputs_size 3
+                   :pp_size 3
+                   :rho 1                    ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
+                   :eta (float 0.001)        ;;  learning_rate
+                   :gama (float 0.4)         ;;  margin around zero              ;0.4
+                   :epsilon (float 0.049)    ;;  level of error that is allowed.
+                   :mu (float 0.9 )}))       ;;  learning modifier around zero   ;0.9
+
+
+
+
+(pp_readout pp2 :input_data_buf)
+(pp_readout pp2 :correct_answer_buf)
+(pp_readout pp2 :pp_answer_buf)
+(pp_readout pp2 :vecProductResult_buf)
+;(count 
+  ;(pp_readout pp2 :alpha_buf)
+  ;)
+
+
+(time (dotimes [n 300]
+  (if (= 0 (mod n 1))
+  (println n
+
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_train_and_answer pp2 [1.0 1.0 1.0 1.0 -1.0] [1.0 1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
+  (pp_readout pp2 :correct_answer_buf)
+  ))
+  
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_train_and_answer pp2 [0.0 0.0 0.0 0.0 -1.0] [1.0 -1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
+  (pp_readout pp2 :correct_answer_buf)
+  ))
+  
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_train_and_answer pp2 [-1.0 0.0 -1.0 0.0 -1.0] [-1.0 1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
+  (pp_readout pp2 :correct_answer_buf)
+  ))
+  
+  (reduce + (map (fn [x y](if (= x y) 0 1))
+  (pp_train_and_answer pp2 [0.0 1.0 0.0 0.0 -1.0] [-1.0 -1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
+  (pp_readout pp2 :correct_answer_buf)
+  ))
+  (pp_readout pp2 :pp_answer_buf)
+  
+  )
+  :done)))
+
+
+
+(dotimes [n 40]
+  (println (/ (- n 10) 10.0)  (pp_answer pp2 [(/ (- n 20) 10.0) 0.0 0.0 0.0 -1.0]))
+)
+
+
+
+
+;;todo Iris data set test
+
+
+
+
 
 
 
