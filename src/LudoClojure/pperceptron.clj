@@ -54,12 +54,13 @@ int gid = get_global_id(0);
        total += alpha[gid * input_size + k] * input_data[k];
   }
   
-if( isnan(total) == 1 || fabs(total) < 1.0E-30 ) {
-      vecProductResult[gid] = 0.0;
-     }
-    else {
-      vecProductResult[gid] =  total;
-    }
+  vecProductResult[gid] =  total;
+//if( isnan(total) == 1 || fabs(total) < 0.00000001 ) {
+//      vecProductResult[gid] = 0.0;
+//     }
+//    else {
+//      vecProductResult[gid] =  total;
+//    }
 }
 
   "
@@ -91,8 +92,7 @@ int gid = get_global_id(0);
             total += -1.0;
              }
   }
-//OLD Implementatioon    pp_answer_buf[gid] = total / pp_size;  //Different squashing functions could be implemente here, eg: binary 1,-1   devide by pp_size is actually incorrect.
-// TODO rho goes here
+
 if (total < -rho) {  
     pp_answer_buf[gid] = -1.0;
     }
@@ -100,7 +100,8 @@ else if (total > rho) {
     pp_answer_buf[gid] = +1.0;
     }
 else {
-    pp_answer_buf[gid] = total / rho ;
+   // pp_answer_buf[gid] = convert_float4_rtp(total / convert_float(rho)) ;    //TODO use a safer function?
+      pp_answer_buf[gid] = total / rho ;
    }
 
 }
@@ -139,7 +140,7 @@ int perceptronid = gid * input_size;
 
 //which pp are we taking pp_answer_buf and correct_answer_buf for?
 //TODO check this division behaves as needed here, does it round down?
-int pp_we_are_talking_to = gid / pp_size;
+int pp_we_are_talking_to = gid / pp_size;   //TODO use a safer function?
 
 
 float pp_answer      =      pp_answer_buf[pp_we_are_talking_to];
@@ -154,16 +155,24 @@ for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
          alpha_norm_squared +=  (alphapart * alphapart);
        }
-float alpha_norm_squared_adjustment  = convert_float_rtz( (alpha_norm_squared - 1.0) * eta );      //
 
+float alpha_norm_squared_adjustment_prep  = (alpha_norm_squared - 1.0) * eta;      //
+float alpha_norm_squared_adjustment = 0.0;
+if( isnan(alpha_norm_squared_adjustment_prep) == 1  || isinf(alpha_norm_squared_adjustment_prep) == 1 ||  fabs(alpha_norm_squared_adjustment_prep) < 1.0E-15 ||  fabs(alpha_norm_squared_adjustment_prep) > 10000.0 ){
+      alpha_norm_squared_adjustment = 0.0;
+      }
+      else
+     {
+     alpha_norm_squared_adjustment = alpha_norm_squared_adjustment_prep;
+     }
 
 float alpha_prewrite = 0.0;
 if ((pp_answer > upper_correct) && (vProductResult >= 0.0)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
          alpha_prewrite =  alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta);
-                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
-                       alpha[perceptronid + k] = 0.0;
+                 if( isnan(alpha_prewrite) == 1 || isinf(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-15 ||  fabs(alpha_prewrite) > 100.0  ) {
+                      //do nothing if there is a problem    alpha[perceptronid + k] = 0.0;
                       }
                  else {
                        alpha[perceptronid + k] =  alpha_prewrite;
@@ -174,8 +183,8 @@ else if ((pp_answer < lower_correct) && (vProductResult < 0.0)){
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
          alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta);
-                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
-                       alpha[perceptronid + k] = 0.0;
+                 if( isnan(alpha_prewrite) == 1 || isinf(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-15 ||  fabs(alpha_prewrite) > 100.0 ) {
+                      //do nothing if there is a problem    alpha[perceptronid + k] = 0.0;
                       }
                  else {
                        alpha[perceptronid + k] =  alpha_prewrite;
@@ -187,8 +196,8 @@ else if ((pp_answer <= upper_correct) && (0.0 <= vProductResult) && (vProductRes
        for(int k=0; k<input_size; k++) {
          alphapart = alpha[perceptronid + k];
          alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) + (input_data[k] * eta * mu) ;
-                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
-                       alpha[perceptronid + k] = 0.0;
+                 if( isnan(alpha_prewrite) == 1 || isinf(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-15 ||  fabs(alpha_prewrite) > 100.0 ) {
+                      //do nothing if there is a problem   alpha[perceptronid + k] = 0.0;
                       }
                  else {
                        alpha[perceptronid + k] =  alpha_prewrite;
@@ -200,8 +209,8 @@ else if ((pp_answer >= lower_correct) && (vProductResult < 0.0)    && (-gama < v
          alphapart = alpha[perceptronid + k];
 
          alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) - (input_data[k] * eta * mu) ;
-                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30) {
-                       alpha[perceptronid + k] = 0.0;
+                 if( isnan(alpha_prewrite) == 1 || isinf(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-15 ||  fabs(alpha_prewrite) > 100.0 ) {
+                      //do nothing if there is a problem   alpha[perceptronid + k] = 0.0;
                       }
                  else {
                        alpha[perceptronid + k] =  alpha_prewrite;
@@ -213,8 +222,8 @@ else {
          alphapart = alpha[perceptronid + k];
 
          alpha_prewrite = alphapart - (alpha_norm_squared_adjustment * alphapart) ;
-                 if( isnan(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-30 ) {
-                       alpha[perceptronid + k] = 0.0;
+                 if( isnan(alpha_prewrite) == 1 || isinf(alpha_prewrite) == 1 ||  fabs(alpha_prewrite) < 1.0E-15 ||  fabs(alpha_prewrite) > 100.0 ) {
+                      //do nothing if there is a problem   alpha[perceptronid + k] = 0.0;
                       }
                  else {
                        alpha[perceptronid + k] =  alpha_prewrite;
@@ -228,6 +237,7 @@ else {
 ;;Compile openCL kernels into the opencl environment
 (opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
 
+;;(make_random_float_array 100 -0.5 1)
 
 (defn make_pp ;[opencl_env  input_size  outputs_size  pp_size rho]
                [options]
@@ -244,11 +254,11 @@ else {
                  epsilon (float 0.0499)
                  mu (float 0.9 )}} options
         size_of_alpha_needed (* input_size pp_size outputs_size)
-        input_data_buf       (lg_create-buffer (:context @opencl_env) input_size :float32-le)
-        alpha_buf            (lg_wrap (:context @opencl_env) (make_random_float_array size_of_alpha_needed -0.5 1) :float32-le)
-        vecProductResult_buf (lg_create-buffer (:context @opencl_env) pp_size :float32-le)
-        correct_answer_buf   (lg_create-buffer (:context @opencl_env) outputs_size :float32-le)
-        pp_answer_buf        (lg_create-buffer (:context @opencl_env) outputs_size :float32-le)
+        input_data_buf       (doall (lg_create-buffer (:context @opencl_env) input_size :float32-le))
+        alpha_buf            (doall (lg_wrap (:context @opencl_env) (make_random_float_array size_of_alpha_needed -0.5 1) :float32-le))
+        vecProductResult_buf (doall (lg_create-buffer (:context @opencl_env) pp_size :float32-le))
+        correct_answer_buf   (doall (lg_create-buffer (:context @opencl_env) outputs_size :float32-le))
+        pp_answer_buf        (doall (lg_create-buffer (:context @opencl_env) outputs_size :float32-le))
         ]
 
   {:alpha_buf            alpha_buf
@@ -314,17 +324,21 @@ down to between -1.0 and 1.0"
                               ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
                           ))
 
-(defn pp_write_input [pp data_float_vec ]
+(defn pp_write_input [pp data_vec ]
   ;;TODO add check for size to be as expects
+    (let [data_float_vec (map float data_vec)]
        (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
+       (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   ;;TODO return an event
-  )
+  ))
 
-(defn pp_write_correct_answer [pp data_float_vec ]
+(defn pp_write_correct_answer [pp data_vec ]
   ;;TODO add check for size to be as expects
+    (let [data_float_vec (map float data_vec)]
        (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
+       (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   ;;TODO return an event
-  )
+  ))
 
 (defn pp_readout [pp buffername]
   @(lg_enqueue-read (pp buffername) ((pp :pp_queue) @(:pp_opencl_env pp))))
@@ -337,12 +351,14 @@ down to between -1.0 and 1.0"
   (pp_write_correct_answer pp output)
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_vecproduct pp)
+  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_reduceToPP  pp)
+  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_updateAlphas  (conj pp (first options)))
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_readout pp :pp_answer_buf)
-
   ))
+
 
 (defn pp_answer [pp input]
  (do
@@ -357,16 +373,18 @@ down to between -1.0 and 1.0"
 (quote do some stuff to a pp
 
 ;;;stress test
-(def pp1 (make_pp {:input_size 40
+(def pp1 (make_pp {:input_size 5     ;;ERROR frist half of output is incorrect
                    
-                   :outputs_size 30
+                   :outputs_size 22
                    :pp_size 30
                    :rho 20                   ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
                    :eta (float 0.001)        ;;  learning_rate
                    :gama (float 0.4)         ;;  margin around zero              ;0.4
                    :epsilon (float 0.049)    ;;  level of error that is allowed.
-                   :mu (float 0.9 )}))       ;;  learning modifier around zero   ;0.9
+                   :mu (float 1.0 )}))       ;;  learning modifier around zero   ;0.9
 
+
+(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
 
 
 
@@ -377,46 +395,88 @@ down to between -1.0 and 1.0"
 ;(count 
   ;(pp_readout pp1 :alpha_buf)
   ;)
-
+  (pp_train_and_answer pp1 [-1.0 1.0 1.0 1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.001)  })
+  (pp_readout pp1 :correct_answer_buf)
+  (count     (pp_readout pp1 :alpha_buf)    )
 
 (time (dotimes [n 1000]
   (if (= 0 (mod n 1))
-  (println n
-
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_readout pp1 :correct_answer_buf)
-  (pp_train_and_answer pp1 [1.0 1.0 1.0 1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
-  ))
-  
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_readout pp1 :correct_answer_buf)
-  (pp_train_and_answer pp1 [0.0 0.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
-  ))
-  
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_readout pp1 :correct_answer_buf)
-  (pp_train_and_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
-  ))
-  
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_readout pp1 :correct_answer_buf)
-  (pp_train_and_answer pp1 [0.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
-  ))
-  
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_readout pp1 :correct_answer_buf)
-  (pp_train_and_answer pp1 [-1.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0] {:gama (float 0.4) :eta (float 0.0001)  })
-  ))
-  (pp_readout pp1 :pp_answer_buf)
-  
+    
+    (do
+       
+;      (Thread/sleep 10)
+ (lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+  (println n)
+(print " "
+  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
+  (pp_train_and_answer pp1 [-1.0 1.0 1.0 1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.001)  })
+  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
+  )))
+(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+; (Thread/sleep 1)
+(print " "
+  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
+  (pp_train_and_answer pp1 [-1.0 0.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.001)  })
+  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
+  )))
+(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+; (Thread/sleep 1)
+(print " "
+  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
+  (pp_train_and_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.001)  })
+  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
+  )))
+(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+; (Thread/sleep 1)
+(print " " 
+  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
+  (pp_train_and_answer pp1 [-1.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.001)  })
+  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
+  )))
+(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+; (Thread/sleep 1)
+(print " "
+  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
+  (pp_train_and_answer pp1 [-1.0 1.0 0.0 -1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.001)  })
+  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
+  )))
+(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+; (Thread/sleep 1)
+(print " "
+  ;(take 10 (pp_readout pp1 :alpha_buf))
+  (if (= 0 (mod n 10))
+     (sort (frequencies   (map (fn [x] 
+                                 (if  (< x -666.6)
+                                   (throw (throw (Exception. "wtf")))
+                                 (/ (int (* x 10.0)) 10.0)
+                                 )
+                                 ) (pp_readout pp1 :alpha_buf) )))
+     
+     ;(sort (frequencies   (map (fn [x] (/ (int (* x 1000.0)) 1000.0)) (pp_readout pp1 :alpha_buf) )))
   )
-  
+  (lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+  ;(pp_readout pp1 :vecProductResult_buf)
+  ;(pp_readout pp1 :pp_answer_buf)
+  ))
   :done)))
+
+(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0])
+(pp_answer pp1 [-1.0 0.0 0.0 0.0 -1.0])
+(pp_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0])
+(pp_answer pp1 [-1.0 1.0 0.0 0.0 -1.0])
+(pp_answer pp1 [-1.0 1.0 0.0 -1.0 -1.0])
+
+
+;;  BUG!!! if we allow pp to be bigger then data loaded into input buffers, we will read unassigned memory that could have ANYTHING in it.
+;;  BUG!!! why are the first 4 failing to converge??!!!?!?!! Fundamental logic fail!, these should be fully seperated, review array logic!
+           ;;learnig ok when sizes of in and out the same....
+
+
+  (sort (frequencies   (map (fn [x] (/ (int (* x 10.0)) 10.0)) (pp_readout pp1 :alpha_buf) )))
 
 (dotimes [n 40]
   (println (/ (- n 20) 20.0)  (pp_answer pp1 [(/ (- n 20) 10.0) 0.5 0.0 0.0 -1.0]))
 )
-
 
 
 
