@@ -2,6 +2,7 @@
  ; (:use [LudoClojure.spindle])
  ; (:use [LudoClojure.spinopencl])
   (:use [LudoClojure.opencl-utils])
+ ;(:require clojure.math.numeric-tower)
   )
 (use 'calx)
 
@@ -375,7 +376,7 @@ down to between -1.0 and 1.0"
 (quote do some stuff to a pp
 
 ;;;stress test
-(def pp1 (make_pp {:input_size 2     ;;ERROR frist half of output is incorrect
+(def pp1 (make_pp {:input_size 5     ;;ERROR frist half of output is incorrect
                    
                    :outputs_size 22
                    :pp_size 30
@@ -465,14 +466,90 @@ down to between -1.0 and 1.0"
 ;  0  0  0  0  0  ([-0.9 170] [-0.8 170] [-0.4 166] [-0.3 38] [-0.2 40] [-0.1 39] [0.0 61] [0.1 49] [0.2 42] [0.3 51] [0.4 174] [0.8 163] [0.9 157]) nil991
 
 
+(time (dotimes [n 100]
+  (pp_train_and_answer pp1 [-1.0 1.0 1.0 1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
+  (pp_train_and_answer pp1 [-1.0 0.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
+  (pp_train_and_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
+  (pp_train_and_answer pp1 [-1.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
+  (pp_train_and_answer pp1 [-1.0 -1.0 0.0 -1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
+))  ;;500ms
+(time (dotimes [n 100]
+(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0 1.0 1.0 1.0 -1.0])
+(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0 0.0 0.0 0.0 -1.0])
+(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0 0.0 -1.0 0.0 -1.0])
+(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0 1.0 0.0 0.0 -1.0])
+(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0 -1.0 0.0 -1.0 -1.0])
+))   ;;300ms
+
+(def pp3 (make_pp {:input_size 20     ;;ERROR frist half of output is incorrect
+                   
+                   :outputs_size 40
+                   :pp_size 30
+                   :rho 20                   ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
+                   :eta (float 0.001)        ;;  learning_rate
+                   :gama (float 0.4)         ;;  margin around zero              ;0.4
+                   :epsilon (float 0.001)    ;;  level of error that is allowed.
+                   :mu (float 1.0 )}))
+
+;;TODO define a stress testing framework to see this scale and see how speeds change with parameters
+
+(defn make_test_array [sizein sizeout numberof]  ;;TODO make this take a pp so that a test for it can be created on the fly
+(reduce (fn [col val]
+(conj col
+[(conj  (make_random_float_array (- sizein 1) -0.5 (+ val 1000)) (float -1.0))
+ (make_random_float_array sizeout -0.5 val)]   )) []  (range numberof))
+)
 
 
+(def testdata (make_test_array 20 40 3))
 
-(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0])
-(pp_answer pp1 [-1.0 0.0 0.0 0.0 -1.0])
-(pp_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0])
-(pp_answer pp1 [-1.0 1.0 0.0 0.0 -1.0])
-(pp_answer pp1 [-1.0 -1.0 0.0 -1.0 -1.0])
+
+(defn round [s n] 
+  (.setScale (bigdec n) s java.math.RoundingMode/HALF_EVEN))
+ (float (round 1 78.37898794))
+
+
+ (defn abs "(abs n) is the absolute value of n" [n]
+  (cond
+   (not (number? n)) (throw (IllegalArgumentException.
+			     "abs requires a number"))
+   (neg? n) (* -1 n)
+   :else n))
+ 
+(defn printerrorcounts []
+(time (dotimes [n 2]
+ (print " " (reduce + (map (fn [x y]
+                           ;;;ARGHH give me an abs  
+                             (if (< (abs (- (float (round 1 x)) (float (round 1  y)))) 0.3)
+                             0 1))
+  (pp_answer pp3 ((testdata n) 0))  ((testdata n) 1))))
+  )))
+
+(defn pp_print_absolute_error [pp testdata]
+(time (dotimes [n (count testdata)]
+ (print " " (reduce + (map (fn [x y]
+                           ;;;ARGHH give me an abs  
+                            (round 4  (abs (- (float (round 1 x)) (float (round 1  y))))))
+  (pp_answer pp ((testdata n) 0))  ((testdata n) 1))))
+  )))
+
+(pp_print_absolute_error pp2 testdata)
+
+(defn train_over_test_data [k pp testdata]
+ (time (dotimes [n k]
+  (dotimes [n (count testdata)] (pp_train_and_answer pp3 ((testdata n) 0) ((testdata n) 1) {:gama (float 0.4) :eta (float 0.0001)  }))
+ (pp_print_absolute_error pp testdata) (print "  " n)
+)))    ;;500ms
+
+(train_over_test_data 1000 pp3 testdata)
+(pp_print_absolute_error pp3 testdata)
+
+(time (dotimes [n 2]
+ (println 
+  ((testdata n) 0) (pp_answer pp3 ((testdata n) 0))  ((testdata n) 1))))
+
+ (pp_answer pp3 ((testdata 0) 0))  ((testdata 0) 1)
+ (pp_answer pp3 ((testdata 1) 0))  ((testdata 1) 1)
 
 
 ;;  BUG!!! if we allow pp to be bigger then data loaded into input buffers, we will read unassigned memory that could have ANYTHING in it.
@@ -542,13 +619,11 @@ down to between -1.0 and 1.0"
   :done)))
 
 
-
-
 (dotimes [n 40]
-  (println (/ (- n 10) 10.0)  (pp_answer pp2 [(/ (- n 20) 10.0) 0.0 0.0 0.0 -1.0]))
+  (println (/ (- n 20) 10.0)  (pp_answer pp2 [(/ (- n 20) 10.0) 0.0 0.0 0.0 -1.0]))
 )
 
-
+(pp_answer pp2 [0.0 0.0 0.0 0.0 -1.0])
 
 
 ;;todo Iris data set test
