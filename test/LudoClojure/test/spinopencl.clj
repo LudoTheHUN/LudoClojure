@@ -2,6 +2,7 @@
   (:use [LudoClojure.spindle])
   (:use [LudoClojure.spinopencl])
   (:use [clojure.test])
+
   )
 
 ;Make an empty openCL spindle

@@ -5,6 +5,8 @@
   ;;(:use [LudoClojure.Win_scrachAlwaysRun])
   )
 
+
+;; TODO move liquid tests to test/liquid.clj 
 (comment
 This is the old values that was here....
 (deftest replace-me ;; FIXME: write

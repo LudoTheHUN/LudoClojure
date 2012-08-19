@@ -1,11 +1,12 @@
 (ns LudoClojure.opencl-utils
   ;(:use [LudoClojure.spindle])
-  ;(:use 'calx)
+  ;(:use [LudoClojure.utils])
+  (:use [calx])
   )
-(use 'calx)
+;(use 'calx)
 
 
-(println "loading opencl_utils")
+(println "loading opencl-utils")
 
 ;;Make the openCL environment here.  Make it just once, lets users add queues if need be.
 
@@ -38,7 +39,7 @@
 (defn buf_elements [buf]
      (:elements buf))
 
-
+;;Example kernels to be added
 (def opencl_kernels
 ^{:doc "
 Atom holding map of kernel names to their specs. This atom will be global to all 
@@ -162,11 +163,7 @@ __kernel void timestwoSlowly(
 })
 
 
-(defn make_random_float_array [size booster seed]
-   (doall
-   (let [r (java.util.Random. seed)]
-     (loop [i 0 outlist []]
-       (if (= i size)
-         outlist
-         (recur (inc i) (conj outlist (float (+ (* (float (.nextInt r 100)) 0.01) booster)) )))))))
+
+
+
 
