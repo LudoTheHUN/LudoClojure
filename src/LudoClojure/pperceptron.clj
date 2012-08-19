@@ -8,7 +8,7 @@
   )
 ;;(use 'calx)
 
-(+ 1 2)
+
 (println "loading pperceptron")
 
 
@@ -247,7 +247,7 @@ else {
 (defn make_pp ;[opencl_env  input_size  outputs_size  pp_size rho]
                [options]
   "TODO use destructuring to pass in a map that configures the pp, provide defaults"
-  (let [{:keys [pp_opencl_env input_size outputs_size pp_size rho eta gama epsilon mu rho] 
+  (let [{:keys [pp_opencl_env input_size outputs_size pp_size rho eta gama epsilon mu rho pp_queue] 
                  :or 
                 {pp_opencl_env opencl_env 
                  input_size 3
@@ -257,7 +257,10 @@ else {
                  eta (float 0.001)
                  gama (float 0.4)
                  epsilon (float 0.0499)
-                 mu (float 0.9 )}} options
+                 mu (float 0.9 )
+                 pp_queue :queue  ;The default queue in then opencl_env
+                 }
+                } options
         size_of_alpha_needed (* input_size pp_size outputs_size)
         input_data_buf       (doall (lg_create-buffer (:context @opencl_env) input_size :float32-le))
         alpha_buf            (doall (lg_wrap (:context @opencl_env) (make_random_float_array size_of_alpha_needed -0.5 1) :float32-le))
@@ -271,10 +274,14 @@ else {
    :vecProductResult_buf vecProductResult_buf
    :correct_answer_buf   correct_answer_buf
    :pp_answer_buf pp_answer_buf
-   :pp_opencl_env opencl_env
-   :pp_queue :queue
-   
-   
+   :pp_opencl_env pp_opencl_env
+   :pp_queue (if (@pp_opencl_env pp_queue)  ;; if queue does not exist in the opencl_env, add it
+                pp_queue
+               ;;:hi1
+                (do (opencl_env_addQueue pp_opencl_env pp_queue)
+                    pp_queue
+                   ;;:hi2
+                   ))
    :input_size input_size
    :outputs_size outputs_size
    :pp_size pp_size
@@ -350,7 +357,9 @@ down to between -1.0 and 1.0"
 
 
 (defn pp_train_and_answer [pp input output & options]
- (do
+  ;;TODO quite sure all these finishes are not necessary
+ (let [pp (conj pp (first options))]
+  (do
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_write_input pp input)
   (pp_write_correct_answer pp output)
@@ -359,15 +368,17 @@ down to between -1.0 and 1.0"
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_reduceToPP  pp)
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
-  (pp_updateAlphas  (conj pp (first options)))
+  ;;(pp_updateAlphas  (conj pp (first options)))
+  (pp_updateAlphas  pp)
   (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_readout pp :pp_answer_buf)
-  ))
+  )))
 
 
 (defn pp_answer [pp input]
+ "TODO : this is not thread safe, 2 threads doing this will bash the same GPU data..."
  (do
-  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
+  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))  ;ensure any queue work finishes
   (pp_write_input pp input)
   (pp_vecproduct pp)
   (pp_reduceToPP  pp)

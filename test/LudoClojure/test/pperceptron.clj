@@ -27,8 +27,6 @@
 
 (lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
 
-
-
 (pp_readout pp1 :input_data_buf)
 (pp_readout pp1 :correct_answer_buf)
 (pp_readout pp1 :pp_answer_buf)
@@ -150,11 +148,11 @@
                  30 ;:outputs_size
                  3  ;:number of items to learn
                  ))
-(pp_print_absolute_error pp3 testdata3)
+;(pp_print_absolute_error pp3 testdata3)
 
-(train_over_test_data 10 pp3 testdata3)
-(train_over_test_data 1000 pp3 testdata3)
-(train_over_test_data 10 pp3 testdata3 true)
+(train_over_test_data 10   pp3 testdata3 false)
+(train_over_test_data 1000 pp3 testdata3 false)
+(train_over_test_data 10   pp3 testdata3 false)
 
 (pp_abs_errorcounts_each pp3 testdata3 0.3)
 (pp_abs_errorcounts_each pp3 testdata3 0.2)
@@ -179,6 +177,7 @@
                    :mu (float 0.9 )}))       ;;  learning modifier around zero   ;0.9
 
 
+(pp2 :pp_queue)
 
 
 (pp_readout pp2 :input_data_buf)
@@ -197,13 +196,13 @@
 
 (def testdata2
     [
-     [[1.0 1.0 1.0 1.0 -1.0] [1.0 1.0 1.0]]
-     [[0.0 0.0 0.0 0.0 -1.0] [1.0 -1.0 1.0]]
+     [[1.0 1.0 1.0 1.0 -1.0]   [1.0 1.0 1.0]]
+     [[0.0 0.0 0.0 0.0 -1.0]   [1.0 -1.0 1.0]]
      [[-1.0 0.0 -1.0 0.0 -1.0] [-1.0 1.0 1.0]]
-     [[0.0 1.0 0.0 0.0 -1.0] [-1.0 -1.0 1.0]]])
+     [[0.0 1.0 0.0 0.0 -1.0]   [-1.0 -1.0 1.0]]])
 
-(train_over_test_data 10 pp2 testdata2 true)
-(train_over_test_data 1000 pp2 testdata2 true)
+(train_over_test_data 10 pp2 testdata2 false)
+(train_over_test_data 1000 pp2 testdata2 false)
 
 (pp_answer pp2 ((testdata2 0) 0))  ((testdata2 0) 1)
 (pp_answer pp2 ((testdata2 1) 0))  ((testdata2 1) 1)
@@ -215,4 +214,46 @@
 )
 
 
+(deftest test_manual_pp_test_pp_own_queue  
+  (def pp_on_my_queue
+        (make_pp {:input_size 5
+                   :outputs_size 3
+                   :pp_size 3
+                   :rho 1                    ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
+                   :eta (float 0.01)        ;;  learning_rate
+                   :gama (float 0.4)         ;;  margin around zero              ;0.4
+                   :epsilon (float 0.049)    ;;  level of error that is allowed.
+                   :mu (float 0.9 )
+                   :pp_queue :my_queue }
+                  )
+        )
+  
+  (pp_on_my_queue :pp_queue)
+  (pp_on_my_queue :alpha_buf)
+  (@(pp_on_my_queue :pp_opencl_env) :queue)
+  
+  (def testdata2a (make_test_array 
+                 5 ;:input_size
+                 3 ;:outputs_size
+                 4  ;:number of items to learn
+                 ))
+  
+  (opencl_env_addQueue opencl_env :my_queue)
+  (@opencl_env :my_queue)
+  (train_over_test_data 10 
+                        (conj pp_on_my_queue [:pp_queue :queue])  ;;valid openCLenv queues only.
+                        testdata2a false)
+  
+ 
+  )
+  
+
+
+
+
+
+  
+  
+  
+  
 

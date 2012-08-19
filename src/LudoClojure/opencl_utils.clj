@@ -20,6 +20,8 @@
                    :queue    my_queue})))
 
 (defn opencl_env_addQueue [opencl_env_map queuekey]
+"Note that queues share the keyname space with other openCL env object, anyone adopting a queue as a library will have to be carefull not to trod on them"
+;;TODO instead of trodding, why no prevent double creation? Maybe throw error so it's obvious no one should add a queue more then once?
   (swap! opencl_env_map 
          (fn [m] 
             (conj m {queuekey (lg_create-queue (first (:devices m)) (:context m) )}))))
