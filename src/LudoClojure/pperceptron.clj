@@ -336,49 +336,78 @@ down to between -1.0 and 1.0"
                               ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
                           ))
 
+
+
+(defn pp_wait_for_event [pp openCLevent]
+;;TODO really need to learn defrecord, defprotocol etc so that each openCL wrapper object can reuse the same function
+"makes the pp queue wait for the given event"
+   (lg_enqueue-wait-for (@(pp :pp_opencl_env) (pp :pp_queue)) openCLevent ))
+
+(defn pp_enqueue_marker [pp]
+    (lg_enqueue-marker (@(pp :pp_opencl_env)(pp :pp_queue))))
+
+
+;; pp clojure reals vector famility of functions
 (defn pp_write_input [pp data_vec ]
   ;;TODO add check for size to be as expects
-    (let [data_float_vec (map float data_vec)]
-       (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
-       (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
-  ;;TODO return an event
-  ))
+  (cond (is_buffer? data_vec)
+         (openCL_copy_buf_to_buf! ((pp :pp_queue) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp)) :copyFloatXtoY
+                data_vec  ;copy data from here
+                (:input_data_buf pp)) ;to here
+        (vector? data_vec)
+           (let [data_float_vec (map float data_vec)]
+              (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
+              (pp_enqueue_marker pp))
+))
 
 (defn pp_write_correct_answer [pp data_vec ]
-  ;;TODO add check for size to be as expects
-    (let [data_float_vec (map float data_vec)]
-       (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
-       (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
-  ;;TODO return an event
-  ))
+  ;;TODO add check for size to be as pp expects
+  (cond (is_buffer? data_vec)
+         (openCL_copy_buf_to_buf! ((pp :pp_queue) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp)) :copyFloatXtoY
+                data_vec  ;copy data from here
+                (:correct_answer_buf pp)) ;to here
+        (vector? data_vec)
+          (let [data_float_vec (map float data_vec)]
+            (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) ((pp :pp_queue) @(:pp_opencl_env pp)))
+            ;REMOVED(lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
+            (pp_enqueue_marker pp))
+))
 
 (defn pp_readout [pp buffername]
   @(lg_enqueue-read (pp buffername) ((pp :pp_queue) @(:pp_opencl_env pp))))
 
 
+
+(defn pp_train [pp input output & options]
+"Just give an input output pair, which can be a float array or buffer,
+   be sure to include a -1.0 entry alawys in one of the possition, ie: the normalising entry  "
+  ;;TODO quite sure all these finishes are not necessary
+ (let [pp (conj pp (first options))]
+  (do
+  (pp_write_input pp input)
+  (pp_write_correct_answer pp output)
+  (pp_vecproduct pp)
+  (pp_reduceToPP  pp)
+  (pp_updateAlphas  (conj pp (first options)))
+)))
+
 (defn pp_train_and_answer [pp input output & options]
   ;;TODO quite sure all these finishes are not necessary
  (let [pp (conj pp (first options))]
   (do
-  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_write_input pp input)
   (pp_write_correct_answer pp output)
-  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_vecproduct pp)
-  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
   (pp_reduceToPP  pp)
-  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
-  ;;(pp_updateAlphas  (conj pp (first options)))
-  (pp_updateAlphas  pp)
-  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
+  (pp_updateAlphas  (conj pp (first options)))
+  ;;(pp_updateAlphas  pp)
   (pp_readout pp :pp_answer_buf)
   )))
-
 
 (defn pp_answer [pp input]
  "TODO : this is not thread safe, 2 threads doing this will bash the same GPU data..."
  (do
-  (lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))  ;ensure any queue work finishes
+  ;;(lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))  ;ensure any queue work finishes
   (pp_write_input pp input)
   (pp_vecproduct pp)
   (pp_reduceToPP  pp)
@@ -389,77 +418,11 @@ down to between -1.0 and 1.0"
 
 
 
+;;;Example finish maybe makes sense if there are not queued buffer writes lg_enqueue-overwrite or lg_enqueue-read
+;(lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
 
 
-
-
-
-(quote do some stuff to a pp
-
-       
-
-
-
-;;;binary results test
-(def pp2 (make_pp {:input_size 5
-                   
-                   :outputs_size 3
-                   :pp_size 3
-                   :rho 1                    ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
-                   :eta (float 0.001)        ;;  learning_rate
-                   :gama (float 0.4)         ;;  margin around zero              ;0.4
-                   :epsilon (float 0.049)    ;;  level of error that is allowed.
-                   :mu (float 0.9 )}))       ;;  learning modifier around zero   ;0.9
-
-
-
-
-(pp_readout pp2 :input_data_buf)
-(pp_readout pp2 :correct_answer_buf)
-(pp_readout pp2 :pp_answer_buf)
-(pp_readout pp2 :vecProductResult_buf)
-;(count 
-  ;(pp_readout pp2 :alpha_buf)
-  ;)
-
-
-(time (dotimes [n 300]
-  (if (= 0 (mod n 1))
-  (println n
-
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_train_and_answer pp2 [1.0 1.0 1.0 1.0 -1.0] [1.0 1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
-  (pp_readout pp2 :correct_answer_buf)
-  ))
-  
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_train_and_answer pp2 [0.0 0.0 0.0 0.0 -1.0] [1.0 -1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
-  (pp_readout pp2 :correct_answer_buf)
-  ))
-  
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_train_and_answer pp2 [-1.0 0.0 -1.0 0.0 -1.0] [-1.0 1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
-  (pp_readout pp2 :correct_answer_buf)
-  ))
-  
-  (reduce + (map (fn [x y](if (= x y) 0 1))
-  (pp_train_and_answer pp2 [0.0 1.0 0.0 0.0 -1.0] [-1.0 -1.0 1.0] {:gama (float 0.4) :eta (float 0.001)  })
-  (pp_readout pp2 :correct_answer_buf)
-  ))
-  (pp_readout pp2 :pp_answer_buf)
-  
-  )
-  :done)))
-
-
-(dotimes [n 40]
-  (println (/ (- n 20) 10.0)  (pp_answer pp2 [(/ (- n 20) 10.0) 0.0 0.0 0.0 -1.0]))
-)
-
-(pp_answer pp2 [0.0 0.0 0.0 0.0 -1.0])
-
-
-;;todo Iris data set test
+;;-------Scratch starts here--------------------------------------------------------------------------
 
 
 
@@ -469,41 +432,31 @@ down to between -1.0 and 1.0"
 
 
 
-(let [x [1 2 3]
-      y [2 2 2]]
-  (map (fn [x y](= x y)) x y))
-
-
-(pp_write_input pp1 [-1.0 0.0 1.0 0.0 -1.0])
-(pp_write_correct_answer pp1 [-1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0])
-(pp_vecproduct pp1)
-(pp_reduceToPP  pp1 )
-(pp_updateAlphas  (conj pp1 {:gama (float 0.3) :eta (float 0.00001)  }))
-(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
-
-
-;(println @(lg_enqueue-read (pp1 :pp_answer_buf) (:queue @opencl_env))) ; @(lg_enqueue-read (pp1 :alpha_buf) (:queue @opencl_env)) )
-;;TODO keep meta data about accuracy to slow down learning rate as more answers become correct.. but that means reading the answer, which is relatively slow and a global... much better the 
-;;assessing learning rate per each pp. 
-
-
-;[-1.0 -0.093 -1.0]
-;[-1.0 1.0 -1.0]
-;[-1.0 -0.101 -1.0]
-;[-1.0 1.0 -1.0]
-
-(lg_finish (:queue @opencl_env))
 
 
 
-)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 (quote
   TODO
   API functions to wrap over pp
-
-  
   (defn make_pp [opencl_env input_size outputs_size pp_size] {...buffers (atom of configs)})
         ;; sets up all buffers, default config)
   (defn update_pp_config [pp {of options }] (swap! pp ..))   ;; to update learning rates etc...)  ;; meta learning functionality here, eg: to optimise learning rate etc?
@@ -515,7 +468,6 @@ down to between -1.0 and 1.0"
   ;;Make these functions of pp being made, eg: ((pp :train) [vecin] [vecout])  ...rifle style
   ;;This removes the need for the pp to be passed in each time for helper function definitions... object is the persistant clojure...
   
-  
   ;;??!! What should the returns be for these... the pp, should be cheap to... sideeffect rampany however...?
   ;;correct clFinish in to be done by user 
   
@@ -524,35 +476,11 @@ down to between -1.0 and 1.0"
   ;ie: have funs that take a pp and hook in input from other openCL object, amit to other openCL object....
   
   ;;Learn defprotocol, defrecord, defmethod etc.... try to use them here...
-    )
-  
   ;;Assume a single openCL env? Needs to know sizes of pp
 
-
-;opencl_env
-;testing kernel compilation 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  ;opencl_env
+  ;testing kernel compilation 
+)
 
 
 (quote
@@ -560,14 +488,8 @@ down to between -1.0 and 1.0"
 ;see which kernel programs
 (keys (:progs @opencl_env))
 
-
 ;(def my_openCL_buf4  (lg_create-buffer my_context 10 :int32-le))
 ;(lg_wrap my_context [5.0 5.2 5.3] :float32-le)
-
-
-
-
-
 
 (def input_data_buf_atom   (atom (lg_wrap (:context @opencl_env) [1.0 0.0 -1.0] :int32-le)))
 (def pp_size 100)
@@ -589,7 +511,6 @@ down to between -1.0 and 1.0"
 (swap! input_data_buf_atom (fn [_] (lg_wrap (:context @opencl_env) [1.0 1.0 -1.0] :float32-le)))
 @(lg_enqueue-read @input_data_buf_atom (:queue @opencl_env))
 
-
 ;;TODO, pull all these on a single pp object that has a generator?
 (def vecProductResult (lg_create-buffer (:context @opencl_env) pp_size :float32-le))
 (def correct_answer_buf (atom (lg_wrap (:context @opencl_env) [1.0] :float32-le)))
@@ -599,11 +520,6 @@ down to between -1.0 and 1.0"
 
 
 (def number_of_pps (buf_elements @correct_answer_buf))
-
-
-
-
-
 
 
 

@@ -41,6 +41,10 @@
 (defn buf_elements [buf]
      (:elements buf))
 
+(defn is_buffer? [buf]
+  (= calx.data.Buffer (class buf)))
+  
+
 ;;Example kernels to be added
 (def opencl_kernels
 ^{:doc "
@@ -71,7 +75,7 @@ kernels and loose guarantee of functionality."}
 ;initial sets of most basic kernels
 {
 :testaddedkernel {
-     :desc "a long string about that the kernel does"
+     :desc "a long string about what the kernel does"
      :postion 3
      :body "
 __kernel void testaddedkernel(
@@ -101,7 +105,7 @@ __kernel void copyFloatXtoY(
   "
 }
 :copyIntXtoY {
-     :desc "copies one float array to another"
+     :desc "copies one Int array to another"
      :postion 1
      :body "
 __kernel void copyIntXtoY(
@@ -130,7 +134,7 @@ __kernel void addOneToFloat(
 }
 
 :timestwo {
-     :desc "takes float x and puts x+1 into y"
+     :desc "takes float x and puts x*2 into y"
      :postion 2
      :body "
 __kernel void timestwo(
@@ -144,7 +148,7 @@ __kernel void timestwo(
 "
 }
 :timestwoSlowly {
-     :desc "takes float x and puts x+1 into y"
+     :desc "takes float x and puts x*2 into y but with a big delay"
      :postion 2
      :body "
 __kernel void timestwoSlowly(
@@ -155,17 +159,33 @@ __kernel void timestwoSlowly(
     int gid = get_global_id(0);
     int iatom = 0; 
     float iterslowly = 0.0;
-    for(iatom = 0; iatom < 20000000; iatom+=1 ) {
+    for(iatom = 0; iatom < 2000000; iatom+=1 ) {
     iterslowly = iterslowly + 1.0;
 }
-    y[gid] = x[gid] * 2.0 + iterslowly - iterslowly;
+    y[gid] = (x[gid] * 2.0) + iterslowly - 2000000;
 }
 "
 }
 })
 
 
+(defn openCL_copy_buf_to_buf! [queue progs copy_type buf1 buf2]
+ "Copy a buffer to another buffer, note both have to have the same frame"
+(if (>= (buf_elements buf2) (buf_elements buf1))
+    (cond (= copy_type :copyFloatXtoY)   ;for use with :float32-le frames
+            (lg_enqueue-kernel queue progs
+                            :copyFloatXtoY
+                            (buf_elements buf1) buf1 buf2)
+          (= copy_type :copyIntXtoY)     ; for use with :int32-le frames
+            (lg_enqueue-kernel queue progs
+                             :copyIntXtoY
+                             (buf_elements buf1) buf1 buf2)
+          :else
+            (throw (Exception. (str "No valid copy_type provided"))))
+    (throw (Exception. (str "Can not copy buf to buff. Unknown frame or bad sizes between ")))))
 
+
+;;TODO add queue branching and merging helpers here.
 
 
 
