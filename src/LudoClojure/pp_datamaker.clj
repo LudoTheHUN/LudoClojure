@@ -53,7 +53,7 @@
       (map count_column_values_nums  (range count_of_columns))]     ;(35 23 43 22 0)
       
       ))
- (count (list_set_of_values fetched_data))
+(count (list_set_of_values fetched_data))
 (detect_types (list_set_of_values fetched_data))
 
 
