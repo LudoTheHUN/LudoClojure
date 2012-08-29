@@ -17,7 +17,7 @@
       fast_event    (lg_enqueue-kernel (@opencl_env :queue) (@opencl_env :progs) :copyFloatXtoY  4 buf1 buf2)
       slow_event    (lg_enqueue-kernel (@opencl_env :myqu2) (@opencl_env :progs) :timestwoSlowly 4 buf1 buf3)
       ]
-          
+
           (is (= (status fast_event) :complete))
           (is (= (status slow_event) :enqueued))
           (is (= @(lg_enqueue-read buf2 (@opencl_env :queue)) (map float data1)))
@@ -62,7 +62,6 @@
  (time(lg_finish extra_queue))
  (println "5:marker is:" (status mymarker) ", marker2 is:" (status mymarker2) ", ker1 is:" (status ker1) ", ker2 is:" (status ker2) ", ker3 is:" (status ker3))
 
- 
  (is ( = (status mymarker) :enqueued))
  (def ker1 (lg_enqueue-kernel (@opencl_env :myqu3) (@opencl_env :progs) :timestwoSlowly 4 abuf abuf))
  (time (wait-for mymarker))
@@ -83,6 +82,55 @@
  (println "4:marker is:" (status mymarker) ", marker2 is:" (status mymarker2) ", ker1 is:" (status ker1) ", ker2 is:" (status ker2) ", ker3 is:" (status ker3))
  (time(lg_finish extra_queue))
  (println "5:marker is:" (status mymarker) ", marker2 is:" (status mymarker2) ", ker1 is:" (status ker1) ", ker2 is:" (status ker2) ", ker3 is:" (status ker3))
+ 
+ 
+ 
+ 
+ (time(loop [n 2000 mark1 (lg_enqueue-marker extra_queue)]    ;~1000ms for 45000 marker creations and enques  for their 
+   (if (= 0 n)
+     (do ;(time (wait-for mark1))
+        (status mark1))
+     (let [mark (lg_enqueue-kernel extra_queue (@opencl_env :progs) 
+                                   :addOneToFloat 
+                                   ;:timestwoSlowly
+                                   4 abuf abuf)  ;(lg_enqueue-marker extra_queue)
+           add_a_waitfor (lg_enqueue-wait-for extra_queue mark)
+           ]
+       ;(println (status mark))
+       (recur (dec n) mark)))))
+  ;(print "released")
+  ;(time(lg_finish extra_queue))
+      (time  (print @(lg_enqueue-read abuf (@opencl_env :queue))))
+      (time  (print @(lg_enqueue-read abuf (@opencl_env :queue))))
+      ;(time  (print @(lg_enqueue-read abuf extra_queue)))
+     (lg_enqueue-wait-for extra_queue (lg_enqueue-marker extra_queue))
+      
+;;Writing data in tests
+(time (let  [mark1 (lg_enqueue-marker extra_queue)
+       mark1a (status mark1)
+       abitbuf (to-buffer [0.1 0.2 0.3 0.7] :float32-le)
+       mark2 (lg_enqueue-marker extra_queue)
+       mark1b (status mark1)
+       mark2b (status mark2)
+       readin (lg_enqueue-overwrite abuf [(- 4) 0] abitbuf extra_queue)   ;;writing data into a buffer from normal memory
+       mark1c (status mark1)
+       mark2c (status mark2)
+       mark3 (lg_enqueue-marker extra_queue)
+       mark3c (status mark3)
+       readoff1 @(lg_enqueue-read abuf (@opencl_env :queue))
+       mark1d (status mark1)
+       mark2d (status mark2)
+       mark3d (status mark3)
+       mark4 (lg_enqueue-marker extra_queue)
+       readoff2 @(lg_enqueue-read abuf extra_queue)
+       mark1e (status mark1)
+       mark2e (status mark2)
+       mark3e (status mark3)
+       mark4e (status mark4)
+       ]
+[mark1b mark1b mark1c mark2c mark3c]
+  ))
+ 
 )
 )
 

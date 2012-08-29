@@ -12,12 +12,17 @@
 
 (def opencl_env
   (let [my_devices (available-devices (platform))
-        my_context (apply create-context (available-devices (platform)))
+        ;my_context (apply create-context (available-devices (platform)))
+        my_context (apply create-context my_devices)
         my_queue (lg_create-queue (first my_devices) my_context )]
   (atom 
-                  {:devices my_devices
+                  {:devices  my_devices
                    :context  my_context
                    :queue    my_queue})))
+
+;(class(best-device (platform)))
+;(class(available-devices (platform)))
+;(create-context (best-device (platform)))
 
 (defn opencl_env_addQueue [opencl_env_map queuekey]
 "Note that queues share the keyname space with other openCL env object, anyone adopting a queue as a library will have to be carefull not to trod on them"

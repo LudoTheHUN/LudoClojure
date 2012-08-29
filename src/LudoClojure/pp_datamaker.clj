@@ -49,16 +49,36 @@
                                                                            ))
                                                         (nth (list_set_of_values fetched_data) x)))))
           ]
-      [(map count_column_values       (range count_of_columns ))    ;(35 23 43 22 3)
-      (map count_column_values_nums  (range count_of_columns))]     ;(35 23 43 22 0)
-      
+      {:count_distinct_items (map count_column_values       (range count_of_columns ))    ;(35 23 43 22 3)
+       :count_distinct_numeric_items (map count_column_values_nums   (range count_of_columns))}     ;(35 23 43 22 0)
       ))
 (count (list_set_of_values fetched_data))
 (detect_types (list_set_of_values fetched_data))
 
+(def myset #{"Iris-virginica" "Iris-versicolor" "Iris-setosa"})
+(disj #{"Iris-virginica" "Iris-versicolor" "Iris-setosa"} "Iris-setosa")
+(reduce (fn[state x] (conj state [x    (count state)   ]))
+     {} #{"Iris-virginica" "Iris-versicolor" "Iris-setosa"})
+
+(defn bitarize [n bitmapsize]
+  "create a bit array from an int representing it's number"
+  (vec (map (fn [x] (if x 1.0 0.0)) (reverse (reduce (fn [state x] (conj state (bit-test n (count state)))) [] (range bitmapsize))))))
+
+(time (bitarize  63   6))
+
+(reduce * (map (fn [_] 2) (range 6)))
 
 
 
+(defstruct bit-field :element-width :array-data)
+
+(defn bit-array
+  [n]
+  (struct bit-field 31 (vector (inc (int (/ n 31))))))
+(bit-array 5)
+
+
+(println (bit-array 14))
 
   (nth (list_set_of_values fetched_data) 0)
   (count (filter true? (map (fn [x](number? (read-string x)))
