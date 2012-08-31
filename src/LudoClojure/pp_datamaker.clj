@@ -4,7 +4,7 @@
 
 (import '(java.net URL)
         '(java.lang StringBuilder)
-        '(java.io BufferedReader InputStreamReader))
+        '(java.io BufferedReader InputStreamReader File))
 
 (defn fetch-url
   "Return the web page as a string."
@@ -17,10 +17,46 @@
        ;(apply str (line-seq buf))))))
        (apply  vector  (line-seq buf))))))
 
- (def url_with_data "http://archive.ics.uci.edu/ml/machine-learning-databases/car/car.data")
- (def url_with_data "http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data")
- 
- (def fetched_data (fetch-url url_with_data))
+
+(defn localise [url]
+ (let [filename (.getName (File. url))
+       local_filename  (str "docs/" filename)
+         ]
+   (if (.exists (File. local_filename))
+      nil
+      (spit local_filename (fetch-url url)))
+   local_filename))
+
+
+(defn- get_resource_dispatch
+  [& params]
+  (let [lead-param (first params)]
+    (cond
+     (empty? params) ::empty
+     (nil? lead-param) ::nil
+     (try (URL. lead-param) (catch Exception e false)) :URL
+     (try (File. lead-param) (catch Exception e false)) :File
+     true :unknown)))
+
+(defmulti get_resource get_resource_dispatch)
+
+(defmethod get_resource :URL
+  [url]
+  (fetch-url url))
+
+(defmethod get_resource :File
+  [filename]
+  (read-string (slurp filename)))
+
+(def url "http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data")
+(def url "http://archive.ics.uci.edu/ml/machine-learning-databases/car/car.data")
+
+(get_resource (localise url))
+
+
+
+(def fetched_data (get_resource (localise url)))
+
 
  (count fetched_data)
  (map (fn [x] (st/split x #",")) fetched_data)
@@ -64,7 +100,7 @@
   "create a bit array from an int representing it's number"
   (vec (map (fn [x] (if x 1.0 0.0)) (reverse (reduce (fn [state x] (conj state (bit-test n (count state)))) [] (range bitmapsize))))))
 
-(time (bitarize  63   6))
+(time (bitarize  501 10))
 
 (reduce * (map (fn [_] 2) (range 6)))
 
