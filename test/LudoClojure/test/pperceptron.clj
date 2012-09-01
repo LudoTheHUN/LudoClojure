@@ -12,7 +12,8 @@
 
 
 (deftest test_manual_pp_test_pp0
-  
+
+
 (def pp0 (make_pp {:input_size 5
                    :outputs_size 3
                    :pp_size 3
@@ -21,6 +22,11 @@
                    :gama (float 0.4)         ;;  margin around zero              ;0.4
                    :epsilon (float 0.049)    ;;  level of error that is allowed.
                    :mu (float 0.9 )}))
+
+(pp_readout pp0 :input_data_buf)
+(pp_readout pp0 :correct_answer_buf)
+(pp_readout pp0 :pp_answer_buf)
+(pp_readout pp0 :vecProductResult_buf)
 
 (let  [input_data [-1.0 1.0 1.0 1.0 -1.0]]
   (pp_write_input pp0 input_data)
