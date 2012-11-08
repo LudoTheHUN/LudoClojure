@@ -4,7 +4,7 @@
 
 (use 'calx)
 ;(use 'clojure.contrib.math)
-(use 'LudoClojure.liquid)
+;(use 'LudoClojure.liquid)
 
 (set! *warn-on-reflection* false)
 

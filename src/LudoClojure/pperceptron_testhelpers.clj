@@ -13,8 +13,8 @@
 
 (defn pp_abs_errorcounts [pp testdata_record allower_error]
   (let [testdata_record (if (is_buffer? (testdata_record 0))
-                          [@(lg_enqueue-read (testdata_record 0) ((pp :pp_queue) @(:pp_opencl_env pp)))
-                           @(lg_enqueue-read (testdata_record 1) ((pp :pp_queue) @(:pp_opencl_env pp)))]
+                          [@(lg_enqueue-read (testdata_record 0) ((:pp_queue pp) @(:pp_opencl_env pp)))
+                           @(lg_enqueue-read (testdata_record 1) ((:pp_queue pp) @(:pp_opencl_env pp)))]
                           testdata_record)]
     (reduce + (map (fn [x y]
                     (if (< (abs (- (float (round 2 x)) (float (round 2  y)))) allower_error)

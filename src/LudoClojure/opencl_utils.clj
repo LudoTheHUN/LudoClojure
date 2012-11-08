@@ -186,8 +186,8 @@ __kernel void timestwoSlowly(
                              :copyIntXtoY
                              (buf_elements buf1) buf1 buf2)
           :else
-            (throw (Exception. (str "No valid copy_type provided"))))
-    (throw (Exception. (str "Can not copy buf to buff. Unknown frame or bad sizes between ")))))
+            (throw (Exception. (str "No valid copy_type provided, only :copyFloatXtoY and :copyIntXtoY are valid"))))
+    (throw (Exception. (str "Can not copy buf to buff. Unknown frame or bad sizes between bufs ")))))
 
 
 ;;TODO add queue branching and merging helpers here.

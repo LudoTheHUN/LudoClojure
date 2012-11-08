@@ -85,7 +85,9 @@
                    :epsilon (float 0.049)    ;;  level of error that is allowed.
                    :mu (float 1.0 )}))
 
-(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+(class pp1)
+
+(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
 
 (pp_readout pp1 :input_data_buf)
 (pp_readout pp1 :correct_answer_buf)
@@ -98,48 +100,49 @@
   (pp_readout pp1 :correct_answer_buf)
   (count     (pp_readout pp1 :alpha_buf)    )
 
-(time (dotimes [n 350]
+(time (dotimes [n 450]
   (if (= 0 (mod n 1))
     
     (do
        
 ;      (Thread/sleep 10)
- (lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+      ;;TODO rewrite test to take data of a data structure....
+ (lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
   (println n)
 (print " "
   (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
   (pp_train_and_answer pp1 [-1.0 1.0 1.0 1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
   [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
   )))
-(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
 ; (Thread/sleep 1)
 (print " "
   (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
   (pp_train_and_answer pp1 [-1.0 0.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
   [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
   )))
-(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
 ; (Thread/sleep 1)
 (print " "
   (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
   (pp_train_and_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
   [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
   )))
-(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
 ; (Thread/sleep 1)
 (print " " 
   (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
   (pp_train_and_answer pp1 [-1.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
   [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
   )))
-(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
 ; (Thread/sleep 1)
 (print " "
   (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-  (pp_train_and_answer pp1 [-1.0 -1.0 0.0 -1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
+  (pp_train_and_answer pp1 [-1.0 -1.0 1.0 -1.0 -1.0] [1.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
   [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
   )))
-(lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
 ; (Thread/sleep 1)
 (print " "
   ;(take 10 (pp_readout pp1 :alpha_buf))
@@ -153,7 +156,7 @@
      
      ;(sort (frequencies   (map (fn [x] (/ (int (* x 1000.0)) 1000.0)) (pp_readout pp1 :alpha_buf) )))
   )
-  (lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))
+  (lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
   ;(pp_readout pp1 :vecProductResult_buf)
   ;(pp_readout pp1 :pp_answer_buf)
   ))
@@ -206,8 +209,8 @@
 ;; test_manual_pp_test_pp1  , if this false, we did not manage to test the mapping 
 (is (= 
     (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-    (pp_answer pp1 [-1.0 -1.0 0.0 -1.0 -1.0] )
-    [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
+    (pp_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] )
+    [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]
     ))
     0))
 
@@ -296,7 +299,7 @@
 (is  (= '(0 0 0) (pp_abs_errorcounts_each pp3 testdata3 0.2)))
 (is  (= '(0 0 0) (pp_abs_errorcounts_each pp3 testdata3 0.11)))
 
-(pp_abs_errorcounts_each pp3 testdata3 0.11)
+(pp_abs_errorcounts_each pp3 testdata3 0.1)
 
 ;(pp_answer pp3 ((testdata3 0) 0))  ((testdata3 0) 1)
 ;(pp_answer pp3 ((testdata3 1) 0))  ((testdata3 1) 1)
@@ -320,7 +323,7 @@
                    :mu (float 0.9 )}))       ;;  learning modifier around zero   ;0.9
 
 
-(pp2 :pp_queue)
+(:pp_queue pp2 )
 
 
 (pp_readout pp2 :input_data_buf)
@@ -371,9 +374,9 @@
                   )
         )
   
-  (pp_on_my_queue :pp_queue)
-  (pp_on_my_queue :alpha_buf)
-  (@(pp_on_my_queue :pp_opencl_env) :queue)
+  (:pp_queue pp_on_my_queue )
+  (:alpha_buf pp_on_my_queue )
+  (:queue @(:pp_opencl_env pp_on_my_queue ) )
   
   (def testdata2a (make_test_array 
                  5 ;:input_size
@@ -424,7 +427,7 @@
  (time  (test_manual_pp_test_pp2))
  (time  (test_manual_pp_test_pp3))
   ;;Typical returns
-  (lg_finish ((pp1 :pp_queue) @(:pp_opencl_env pp1)))    ;; -> nil
+  (lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))    ;; -> nil
 
   (def enqued_event (pp_updateAlphas pp1))                                      ;; enqued_event -> #<CLEvent Event {commandType: NDRangeKernel}>
   (status enqued_event)                                                         ;;:enqueued
@@ -433,7 +436,7 @@
   
   (def enqued_event (pp_updateAlphas pp1))                                      ;;:enqueued
 ;;  (lg_enqueue-wait-for (:queue @opencl_env) enqued_event )                      ;nil  ;;exposes its pants, especially if event is supposed to be in a pp
-  (lg_enqueue-wait-for (@(pp1 :pp_opencl_env) (pp1 :pp_queue)) enqued_event )   ;nil
+  (lg_enqueue-wait-for (@(:pp_opencl_env pp1) (:pp_queue pp1)) enqued_event )   ;nil
   (status enqued_event)                                                         ;;:enqueued
   (pp_readout pp1 :input_data_buf)                                              ;[-1.0 -1.0 0.0 -1.0 -1.0]
   (status enqued_event)                                                         ;;:complete
@@ -477,13 +480,13 @@
   (status enqued_event)
   (pp_readout (conj pp1 [:pp_queue :my_queue]) :input_data_buf)                 ;;Readout on a differnt queue does not force an event to happen
   (status enqued_event)
-  (lg_enqueue-wait-for (@(pp1 :pp_opencl_env) ((conj pp1 [:pp_queue :my_queue]) :pp_queue)) enqued_event )   ;;enques a wait-for on the :my-queue, forcing event to happen on :queue before readout
+  (lg_enqueue-wait-for (@( :pp_opencl_env pp1) ((conj pp1 [:pp_queue :my_queue]) :pp_queue)) enqued_event )   ;;enques a wait-for on the :my-queue, forcing event to happen on :queue before readout
   (status enqued_event)
   (pp_readout (conj pp1 [:pp_queue :my_queue]) :input_data_buf)
   (status enqued_event)
   
   ;Markers
-  (def myMarker_event (lg_enqueue-marker (@(pp1 :pp_opencl_env)(pp1 :pp_queue))))
+  (def myMarker_event (lg_enqueue-marker (@(:pp_opencl_env pp1)(:pp_queue pp1))))
   (status myMarker_event)
   
   (= calx.data.Buffer (class (:input_data_buf pp1)))
