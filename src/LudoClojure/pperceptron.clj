@@ -263,8 +263,10 @@ else {
                         mu
                         ])
 
-(defn make_pp ;[opencl_env  input_size  outputs_size  pp_size rho]
-               [options]
+(defn make_pp 
+    "Returns a Pperceptron initialised as per specification"
+  ;[opencl_env  input_size  outputs_size  pp_size rho]
+  [options]
   "TODO use destructuring to pass in a map that configures the pp, provide defaults"
   (let [{:keys [pp_opencl_env input_size outputs_size pp_size rho eta gama epsilon mu rho pp_queue] 
                  :or 
@@ -338,9 +340,7 @@ else {
 
 @(:pp_opencl_env ^Pperceptron a_pp)
 (:pp_queue a_pp)
-
 )
-
 
 (defn pp_vecproduct [^Pperceptron pp]
   "Part one stage of compoutig a pp answer. Takes input data that and alphas and does a vector product over them"

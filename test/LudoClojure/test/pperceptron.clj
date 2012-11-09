@@ -100,67 +100,49 @@
   (pp_readout pp1 :correct_answer_buf)
   (count     (pp_readout pp1 :alpha_buf)    )
 
-(time (dotimes [n 450]
+(defn test_pp_train [in_a out_a test_a]
+(reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
+               (pp_train_and_answer pp1 in_a out_a {:gama (float 0.4) :eta (float 0.0005)  })
+               test_a
+  )))
+
+(let [in_a [-1.0 1.0 1.0 1.0 -1.0]
+      out_a [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]]
+  (test_pp_train in_a out_a out_a))
+
+
+
+(let [in_a [-1.0 1.0 1.0 1.0 -1.0]
+      out_a [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]
+      out_a2 [1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]]
+(time (dotimes [n 500]
   (if (= 0 (mod n 1))
-    
     (do
-       
 ;      (Thread/sleep 10)
       ;;TODO rewrite test to take data of a data structure....
- (lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
+ ;(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
   (println n)
-(print " "
-  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-  (pp_train_and_answer pp1 [-1.0 1.0 1.0 1.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
-  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
-  )))
-(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
-; (Thread/sleep 1)
-(print " "
-  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-  (pp_train_and_answer pp1 [-1.0 0.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
-  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
-  )))
-(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
-; (Thread/sleep 1)
-(print " "
-  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-  (pp_train_and_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
-  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
-  )))
-(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
-; (Thread/sleep 1)
-(print " " 
-  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-  (pp_train_and_answer pp1 [-1.0 1.0 0.0 0.0 -1.0] [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
-  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
-  )))
-(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
-; (Thread/sleep 1)
-(print " "
-  (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-  (pp_train_and_answer pp1 [-1.0 -1.0 1.0 -1.0 -1.0] [1.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0] {:gama (float 0.4) :eta (float 0.0005)  })
-  [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0]
-  )))
-(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
-; (Thread/sleep 1)
-(print " "
-  ;(take 10 (pp_readout pp1 :alpha_buf))
-  (if (= 0 (mod n 10))
+  (print " " (test_pp_train [-1.0 1.0 1.0 1.0 -1.0] out_a out_a))
+  (print " " (test_pp_train [-1.0 0.0 0.0 0.0 -1.0] out_a out_a))
+  (print " " (test_pp_train [-1.0 0.0 -1.0 0.0 -1.0] out_a out_a))
+  (print " " (test_pp_train [-1.0 1.0 0.0 0.0 -1.0] out_a2 out_a2))   ;;note this is much harder to get right
+  (print " " (test_pp_train [-1.0 -1.0 1.0 -1.0 -1.0] out_a out_a))
+  (print " "
+    (if (= 0 (mod n 10))
      (sort (frequencies   (map (fn [x] 
                                  (if  (< x -666.6)
                                    (throw (throw (Exception. "wtf")))
                                  (/ (int (* x 10.0)) 10.0)
                                  )
-                                 ) (pp_readout pp1 :alpha_buf) )))
+                                 ) (pp_readout pp1 :alpha_buf))))
      
      ;(sort (frequencies   (map (fn [x] (/ (int (* x 1000.0)) 1000.0)) (pp_readout pp1 :alpha_buf) )))
-  )
-  (lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
+    )
+  ;(lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
   ;(pp_readout pp1 :vecProductResult_buf)
   ;(pp_readout pp1 :pp_answer_buf)
   ))
-  :done)))
+  :done))))
 
 
 
@@ -181,8 +163,8 @@
 (pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0 1.0 0.0 0.0 -1.0])
 (pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0 -1.0 0.0 -1.0 -1.0])
 
-(pp_answer pp1 [-1.0 1.0 1.0 1.0 -1.0])
-(pp_answer pp1 [-1.0 0.9 1.0 1.0 -1.0])
+(pp_answer pp1 [-1.0 1.0 0.0 0.0 -1.0])
+(pp_answer pp1 [-1.0 0.9 0.0 0.0 -1.0])
 (pp_answer pp1 [-1.0 0.8 1.0 1.0 -1.0])
 (pp_answer pp1 [-1.0 0.7 1.0 1.0 -1.0])
 (pp_answer pp1 [-1.0 0.6 1.0 1.0 -1.0])
