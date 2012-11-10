@@ -1,4 +1,4 @@
-(ns LudoClojure.test.pperceptron
+(ns LudoClojure.test.testpperceptron
   (:use [LudoClojure.opencl-utils])
   (:use [LudoClojure.pperceptron])
   (:use [LudoClojure.pperceptron-testhelpers])
@@ -23,6 +23,13 @@
                    :epsilon (float 0.049)    ;;  level of error that is allowed.
                    :mu (float 0.9 )}))
 
+(comment "This is how we will make stuff wait for each other"
+(def marker11 (pp_enqueue_marker pp0))
+(status marker11)
+(pp_wait_for_event pp0 marker11)
+)
+
+(class pp0)
 (pp_readout pp0 :input_data_buf)
 (pp_readout pp0 :correct_answer_buf)
 (pp_readout pp0 :pp_answer_buf)
@@ -87,6 +94,7 @@
 
 (class pp1)
 
+
 (lg_finish ((:pp_queue pp1) @(:pp_opencl_env pp1)))
 
 (pp_readout pp1 :input_data_buf)
@@ -115,7 +123,7 @@
 (let [in_a [-1.0 1.0 1.0 1.0 -1.0]
       out_a [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]
       out_a2 [1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]]
-(time (dotimes [n 500]
+(time (dotimes [n 1000]
   (if (= 0 (mod n 1))
     (do
 ;      (Thread/sleep 10)
@@ -144,7 +152,12 @@
   ))
   :done))))
 
-
+(is (= 
+    (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
+    (pp_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] )
+    [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]
+    ))
+    0))
 
 ;  0  0  0  0  0  ([-0.9 170] [-0.8 170] [-0.4 166] [-0.3 38] [-0.2 40] [-0.1 39] [0.0 61] [0.1 49] [0.2 42] [0.3 51] [0.4 174] [0.8 163] [0.9 157]) nil991
 
@@ -189,12 +202,7 @@
 ))
 
 ;; test_manual_pp_test_pp1  , if this false, we did not manage to test the mapping 
-(is (= 
-    (reduce + (map (fn [x y](if (= (float x) (float y)) 0 1))
-    (pp_answer pp1 [-1.0 0.0 -1.0 0.0 -1.0] )
-    [0.0 -0.90000004 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.90000004 1.0 0.0]
-    ))
-    0))
+
 
 )
 
@@ -389,16 +397,28 @@
                    :gama (float 0.4)         ;;  margin around zero              ;0.4
                    :epsilon (float 0.049)    ;;  level of error that is allowed.
                    :mu (float 0.9 )})
-         marker1 (pp_enqueue_marker pp_markings)
-         marker2 (pp_enqueue_marker pp_markings)]
+              
+         marker1        (pp_enqueue_marker pp_markings)
+         marker2        (pp_enqueue_marker pp_markings)
+         marker1status1  (status marker1)
+         dosomething    (pp_readout pp_markings :input_data_buf)
+         marker2status1  (status marker2)
+         waited1         (pp_wait_for_event pp_markings marker1)  ;;this is redundant here...
+         marker1status2  (status marker1)
+         marker2status2  (status marker2)
+         ]
 
-      (pp_wait_for_event pp_markings marker1)
-      (status marker1)
+      {:marker1status1 marker1status1
+       :marker2status1 marker2status1
+       :marker1status2  marker1status2
+       :marker2status2  marker2status2
+       }
+;      (status marker1)
 ;      (wait-for marker1)
       ;(lg_enqueue-wait-for marker1)
-      (status marker1)
-     (status marker2)
-      ) :enqueued)
+;      (status marker1)
+;     (status marker2)
+      ) {:marker1status1 :enqueued, :marker2status1 :complete, :marker1status2 :complete, :marker2status2 :complete})
  )
   )
 

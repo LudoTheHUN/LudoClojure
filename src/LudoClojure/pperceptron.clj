@@ -246,7 +246,23 @@ else {
 
 ;;(make_random_float_array 100 -0.5 1)
 
-(defrecord Pperceptron [alpha_buf 
+
+(defprotocol PperceptronProtocol
+  "Protocol for asking and teaching a paralel perceptron."
+  (pp_vecproduct [pp] "Part one stage of compoutig a pp answer. Takes input data that and alphas and does a vector product over them")
+  (pp_reduceToPP [pp] "Part two takes the vector products result and adds it up for each pp, giving an integer which is the pp answer, this is scaled down to between -1.0 and 1.0")
+  (pp_updateAlphas [pp] "The 3rd stage does the learning by updating the alphas vector by considering the correct answer provided and the answer given by the current pp")
+  (pp_wait_for_event [pp openCLevent] "makes the pp queue wait for the given event")
+  (pp_enqueue_marker [pp] "enque a marker on the pp openCL queue")
+  (pp_write_input [pp data_vec] "write a float vector, or an openCL buffer, to the pp input data vector")
+  (pp_write_correct_answer [pp data_vec] "write a float vector, or an openCL buffer, to the pp correct answer data vector")
+  (pp_readout [pp buffkey] "read out one of the pp buffers")
+  (pp_train  [pp input output] [pp input output options] "train a pp on the input, correct output pair, optionaly do so with different then default meta parameters")
+  (pp_train_and_answer [pp input output] [pp input output options] "train a pp on the input, correct output pair, optionaly do so with different then default meta parameters, and also return pp answer")
+  (pp_answer [pp input] "get pp answer to a specific input. No training is done")
+  )
+
+(defrecord PperceptronRecord [alpha_buf 
                         input_data_buf
                         vecProductResult_buf
                         correct_answer_buf
@@ -261,7 +277,149 @@ else {
                         gama
                         epsilon
                         mu
-                        ])
+                        ]
+  PperceptronProtocol
+(pp_vecproduct [pp]
+  "Part one stage of compoutig a pp answer. Takes input data that and alphas and does a vector product over them"
+  (lg_enqueue-kernel ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
+      :vecProduct  (* (:pp_size pp) (:outputs_size pp))    ;;global size, here number of perceptrons in the one pp
+                          (:input_size pp)  ;;inluding the bias term
+                          (:input_data_buf pp)
+                          (:alpha_buf pp)    ;;should be 
+                          (:vecProductResult_buf pp)))
+
+(pp_reduceToPP [pp]
+  "Part two takes the vector products result and adds it up for each pp, giving an integer which is the pp answer, this is scaled 
+down to between -1.0 and 1.0"
+  (lg_enqueue-kernel ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
+                          :reduceToPP
+                          (:outputs_size pp) ;;global size, here total number of perceptrons, here just one
+                          (:pp_size pp)
+                          (:rho  pp)
+                          (:vecProductResult_buf pp)
+                          (:pp_answer_buf pp)))
+
+(pp_updateAlphas [pp]
+ "The 3rd stage does the learning by updating the alphas vector by considering the correct answer provided and the answer given by the current pp"
+  (lg_enqueue-kernel ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
+                          :updateAlphas
+                          (* (:pp_size pp) (:outputs_size pp))        ;global size, here number of perceptrons in the one pp * number_of_pps
+                          (:outputs_size pp)     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
+                          (:pp_size pp)
+                          (:input_size pp)          ;will be looping using this parameter to update all alphas
+                          (:eta pp)
+                          (:gama pp)
+                          (:epsilon pp)
+                          (:mu pp)
+                          (:input_data_buf pp)
+                          (:vecProductResult_buf pp)
+                          (:pp_answer_buf pp)
+                          (:correct_answer_buf pp)
+                          (:alpha_buf pp)
+                              ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
+                          ))
+
+(pp_wait_for_event [pp openCLevent]
+;;TODO really need to learn defrecord, defprotocol etc so that each openCL wrapper object can reuse the same function
+"makes the pp queue wait for the given event"
+   (lg_enqueue-wait-for (@( :pp_opencl_env pp) (:pp_queue pp)) openCLevent ))
+
+(pp_enqueue_marker [pp]
+    (lg_enqueue-marker (@(:pp_opencl_env pp)(:pp_queue pp))))
+
+;;TODO refactor both write fuctions
+;; pp clojure reals vector familiy of functions
+(pp_write_input [pp data_vec ]
+  ;;TODO add check for size to be as expects
+  (cond (is_buffer? data_vec)
+         (openCL_copy_buf_to_buf! ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp)) :copyFloatXtoY
+                data_vec  ;copy data from here
+                (:input_data_buf pp)) ;to here
+        (vector? data_vec)
+           (let [data_float_vec (map float data_vec)]
+              (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) ((:pp_queue pp) @(:pp_opencl_env pp)))
+              (pp_enqueue_marker pp))
+))
+
+(pp_write_correct_answer [pp data_vec ]
+  ;;TODO add check for size to be as pp expects
+  (cond (is_buffer? data_vec)
+         (openCL_copy_buf_to_buf! ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp)) :copyFloatXtoY
+                data_vec  ;copy data from here
+                (:correct_answer_buf pp)) ;to here
+        (vector? data_vec)
+          (let [data_float_vec (map float data_vec)]
+            (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) ((:pp_queue pp) @(:pp_opencl_env pp)))
+            ;REMOVED(lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
+            (pp_enqueue_marker pp))
+))
+
+(pp_readout [pp buffkey]
+  ;;TODO make :pp_answer_buf the default read out
+  @(lg_enqueue-read (buffkey pp) ((:pp_queue pp) @(:pp_opencl_env pp))))
+ ; @(lg_enqueue-read (:input_data_buf pp) ((:pp_queue pp) @(:pp_opencl_env pp))))
+
+
+(pp_train [pp input output]
+"Just give an input output pair, which can be a float array or buffer,
+   be sure to include a -1.0 entry alawys and consistently in one of the possition, ie: the normalising entry  "
+  ;;TODO quite sure all these finishes are not necessary
+  (do
+  (pp_write_input pp input)
+  (pp_write_correct_answer pp output)
+  (pp_vecproduct pp)
+  (pp_reduceToPP pp)
+  (pp_updateAlphas pp)))
+(pp_train [pp input output options]
+"Just give an input output pair, which can be a float array or buffer,
+   be sure to include a -1.0 entry alawys and consistently in one of the possition, ie: the normalising entry  "
+  ;;TODO quite sure all these finishes are not necessary
+ (let [pp (conj pp options)]
+  (do
+  (pp_write_input pp input)
+  (pp_write_correct_answer pp output)
+  (pp_vecproduct pp)
+  (pp_reduceToPP  pp)
+  (pp_updateAlphas  (conj pp options))
+)))
+
+(pp_train_and_answer [pp input output]
+  ;;TODO quite sure all these finishes are not necessary
+  (do
+  (pp_write_input pp input)
+  (pp_write_correct_answer pp output)
+  (pp_vecproduct pp)
+  (pp_reduceToPP  pp)
+  (pp_updateAlphas pp )
+  ;;(pp_updateAlphas  pp)
+  (pp_readout pp :pp_answer_buf)
+  ))
+(pp_train_and_answer [pp input output options]
+  ;;TODO quite sure all these finishes are not necessary
+ (let [pp (conj pp options)]
+  (do
+  (pp_write_input pp input)
+  (pp_write_correct_answer pp output)
+  (pp_vecproduct pp)
+  (pp_reduceToPP  pp)
+  (pp_updateAlphas  (conj pp options))
+  ;;(pp_updateAlphas  pp)
+  (pp_readout pp :pp_answer_buf)
+  )))
+
+(pp_answer [pp input]
+ "TODO : this is not thread safe, 2 threads doing this will bash the same GPU data..."
+ (do
+  ;;(lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))  ;ensure any queue work finishes
+  (pp_write_input pp input)
+  (pp_vecproduct pp)
+  (pp_reduceToPP  pp)
+  (pp_readout pp :pp_answer_buf)
+  ))
+
+)
+
+
 
 (defn make_pp 
     "Returns a Pperceptron initialised as per specification"
@@ -312,7 +470,7 @@ else {
             :mu                   mu            ;;  learning modifier around zero
    })
   
- (Pperceptron. alpha_buf 
+ (PperceptronRecord. alpha_buf 
                input_data_buf 
                vecProductResult_buf
                correct_answer_buf
@@ -322,11 +480,14 @@ else {
                input_size
                outputs_size
                pp_size
-               rho
-               eta
-               gama
-               epsilon
-               mu)))
+               rho                   ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
+               eta                   ;;  learning_rate
+               gama                  ;;  margin around zero
+               epsilon               ;;  level of error that is allowed.
+               mu                    ;;  learning modifier around zero
+  )))
+
+
 
 (comment
 (def a_pp (make_pp {:input_size 5
@@ -340,132 +501,9 @@ else {
 
 @(:pp_opencl_env ^Pperceptron a_pp)
 (:pp_queue a_pp)
+(:pp_answer_buf a_pp)
+(pp_readout a_pp :input_data_buf)
 )
-
-(defn pp_vecproduct [^Pperceptron pp]
-  "Part one stage of compoutig a pp answer. Takes input data that and alphas and does a vector product over them"
-  (lg_enqueue-kernel ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
-      :vecProduct  (* (:pp_size pp) (:outputs_size pp))    ;;global size, here number of perceptrons in the one pp
-                          (:input_size pp)  ;;inluding the bias term
-                          (:input_data_buf pp)
-                          (:alpha_buf pp)    ;;should be 
-                          (:vecProductResult_buf pp)))
-
-
-
-(defn pp_reduceToPP [^Pperceptron pp]
-  "Part two takes the vector products result and adds it up for each pp, giving an integer which is the pp answer, this is scaled 
-down to between -1.0 and 1.0"
-  (lg_enqueue-kernel ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
-                          :reduceToPP
-                          (:outputs_size pp) ;;global size, here total number of perceptrons, here just one
-                          (:pp_size pp)
-                          (:rho  pp)
-                          (:vecProductResult_buf pp)
-                          (:pp_answer_buf pp)))
-
-
-(defn pp_updateAlphas [^Pperceptron pp]
- "The 3rd stage does the learning by updating the alphas vector by considering the correct answer provided and the answer given by the current pp"
-  (lg_enqueue-kernel ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp))
-                          :updateAlphas
-                          (* (:pp_size pp) (:outputs_size pp))        ;global size, here number of perceptrons in the one pp * number_of_pps
-                          (:outputs_size pp)     ; we will need to bring in global data relavant to the pp to each perceptron within, a kind of join, 
-                          (:pp_size pp)
-                          (:input_size pp)          ;will be looping using this parameter to update all alphas
-                          (:eta pp)
-                          (:gama pp)
-                          (:epsilon pp)
-                          (:mu pp)
-                          (:input_data_buf pp)
-                          (:vecProductResult_buf pp)
-                          (:pp_answer_buf pp)
-                          (:correct_answer_buf pp)
-                          (:alpha_buf pp)
-                              ;;Strategy is compute all global values first, then loop over the alpha buffer to apply updates if needed
-                          ))
-
-
-
-(defn pp_wait_for_event [^Pperceptron pp openCLevent]
-;;TODO really need to learn defrecord, defprotocol etc so that each openCL wrapper object can reuse the same function
-"makes the pp queue wait for the given event"
-   (lg_enqueue-wait-for (@( :pp_opencl_env pp) (:pp_queue pp)) openCLevent ))
-
-(defn pp_enqueue_marker [^Pperceptron pp]
-    (lg_enqueue-marker (@(:pp_opencl_env pp)(:pp_queue pp))))
-
-
-;;TODO refactor both write fuctions
-;; pp clojure reals vector famility of functions
-(defn pp_write_input [^Pperceptron pp data_vec ]
-  ;;TODO add check for size to be as expects
-  (cond (is_buffer? data_vec)
-         (openCL_copy_buf_to_buf! ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp)) :copyFloatXtoY
-                data_vec  ;copy data from here
-                (:input_data_buf pp)) ;to here
-        (vector? data_vec)
-           (let [data_float_vec (map float data_vec)]
-              (lg_enqueue-overwrite (:input_data_buf pp) [(- (:input_size pp)) 0] (to-buffer data_float_vec :float32-le) ((:pp_queue pp) @(:pp_opencl_env pp)))
-              (pp_enqueue_marker pp))
-))
-
-(defn pp_write_correct_answer [^Pperceptron pp data_vec ]
-  ;;TODO add check for size to be as pp expects
-  (cond (is_buffer? data_vec)
-         (openCL_copy_buf_to_buf! ((:pp_queue pp) @(:pp_opencl_env pp)) (:progs @(:pp_opencl_env pp)) :copyFloatXtoY
-                data_vec  ;copy data from here
-                (:correct_answer_buf pp)) ;to here
-        (vector? data_vec)
-          (let [data_float_vec (map float data_vec)]
-            (lg_enqueue-overwrite (:correct_answer_buf pp) [(- (:outputs_size pp)) 0] (to-buffer data_float_vec :float32-le) ((:pp_queue pp) @(:pp_opencl_env pp)))
-            ;REMOVED(lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))
-            (pp_enqueue_marker pp))
-))
-
-(defn pp_readout [^Pperceptron pp buffkey]
-  ;;TODO make :pp_answer_buf the default write out
-  @(lg_enqueue-read (buffkey pp ) ((:pp_queue pp) @(:pp_opencl_env pp))))
-
-
-
-(defn pp_train [^Pperceptron pp input output & options]
-"Just give an input output pair, which can be a float array or buffer,
-   be sure to include a -1.0 entry alawys in one of the possition, ie: the normalising entry  "
-  ;;TODO quite sure all these finishes are not necessary
- (let [pp (conj pp (first options))]
-  (do
-  (pp_write_input pp input)
-  (pp_write_correct_answer pp output)
-  (pp_vecproduct pp)
-  (pp_reduceToPP  pp)
-  (pp_updateAlphas  (conj pp (first options)))
-)))
-
-(defn pp_train_and_answer [^Pperceptron pp input output & options]
-  ;;TODO quite sure all these finishes are not necessary
- (let [pp (conj pp (first options))]
-  (do
-  (pp_write_input pp input)
-  (pp_write_correct_answer pp output)
-  (pp_vecproduct pp)
-  (pp_reduceToPP  pp)
-  (pp_updateAlphas  (conj pp (first options)))
-  ;;(pp_updateAlphas  pp)
-  (pp_readout pp :pp_answer_buf)
-  )))
-
-(defn pp_answer [pp input]
- "TODO : this is not thread safe, 2 threads doing this will bash the same GPU data..."
- (do
-  ;;(lg_finish ((pp :pp_queue) @(:pp_opencl_env pp)))  ;ensure any queue work finishes
-  (pp_write_input pp input)
-  (pp_vecproduct pp)
-  (pp_reduceToPP  pp)
-  (pp_readout pp :pp_answer_buf)
-  ))
-
-
 
 
 

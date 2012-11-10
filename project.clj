@@ -6,6 +6,12 @@
                 ; [calx/javacl "1.0.4b"]
                 ; [gloss "0.1.1-SNAPSHOT"]
                 [quil "1.6.0"]
+                 [org.clojars.processing-core/org.processing.core "1.5.1"]
+                 [org.clojars.processing-core/org.processing.gluegen-rt "1.5.1"]
+                 [org.clojars.processing-core/org.processing.jogl "1.5.1"]
+                 [org.clojars.processing-core/org.processing.opengl "1.5.1"]
+                 [org.clojars.processing-core/org.processing.itext "1.5.1"]
+                 [org.clojars.processing-core/org.processing.pdf "1.5.1"]
                  ]
 ;  :dev-dependencies [
 ;        [lein-eclipse "1.0.0"]
