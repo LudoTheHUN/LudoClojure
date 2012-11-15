@@ -249,7 +249,7 @@ else {
 
 (defprotocol PperceptronProtocol
   "Protocol for asking and teaching a paralel perceptron."
-  (pp_vecproduct [pp] "Part one stage of compoutig a pp answer. Takes input data that and alphas and does a vector product over them")
+  (pp_vecproduct [pp] "Part one stage of computig a pp answer. Takes input data that and alphas and does a vector product over them")
   (pp_reduceToPP [pp] "Part two takes the vector products result and adds it up for each pp, giving an integer which is the pp answer, this is scaled down to between -1.0 and 1.0")
   (pp_updateAlphas [pp] "The 3rd stage does the learning by updating the alphas vector by considering the correct answer provided and the answer given by the current pp")
   (pp_wait_for_event [pp openCLevent] "makes the pp queue wait for the given event")

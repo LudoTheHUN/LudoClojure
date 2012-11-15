@@ -6,7 +6,7 @@
 ;(use 'clojure.contrib.math)
 ;(use 'LudoClojure.liquid)
 
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 (def globalsize (* 64 64 64))  ;Total size of liquid
 (def connections 5)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
@@ -18,12 +18,11 @@
 LSM TODOs
 
 DONE Get modeled neurons more realistic as per calc model
-DONE Note, this could take forever, need tools to manage this... Tune parameters to somethig realistic, spike should me much more then typical potential
-Look at storm, we need to create many liquids on the fly, just by passing a name of this liquid, create a DSL for creating them... what would be an idomatic way of doing this?
+DONE Note, this could take forever, need tools to manage this... Tune parameters to somethig realistic, spike should be much more then typical potential
+Look at storm, we need to create many liquids on the fly, just by passing a name of this liquid, create a DSL for creating them... what would be an idomatic way of doing this? Answer defrecord and defprotocol
 
-
-Thing about output neurons, pdelta rule, parallel perceptrons, their GPU implementation....Need to create many on the fly.... DSL again?
-implement p-delta rule
+DONE Thing about output neurons, pdelta rule, parallel perceptrons, their GPU implementation....Need to create many on the fly.... DSL again? Answer pp done properly.
+DONE implement p-delta rule
 Set up a test case for testing, test data to inject... real vs procedurally created?
 )
 
@@ -98,7 +97,7 @@ else  {
 }  //Closing the non spike firing else
 
         // Any writing out of bounds of an array corrupts memory further afield!!!
-        // Note: ANY writing to the same location causes a catastrophic result fail, aka race condition
+        // Note: ANY writing to the same location twice causes a catastrophic result fail, aka race condition
 
 debug_infobuff[gid]= random_value;
 
@@ -271,9 +270,9 @@ __kernel void flopliquid(
 (println "Number of synapses: "(* globalsize connections)   "  Number of neurons:" globalsize )
 )
 
-(def globalsize (* 64 64 64))  ;Total size of liquid
-(def connections 7)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
-(def opencl_loops 50)
+(def globalsize (* 64 64 64 3))  ;Total size of liquid
+(def connections 20)                 ;Number of neurons each neuron should connect to, a double connection is more and more likely with the size...
+(def opencl_loops 1000)
 
 
 ;   (swap! readout_liquid_status (fn [_] false))
