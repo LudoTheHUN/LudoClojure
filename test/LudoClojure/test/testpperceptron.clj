@@ -21,7 +21,7 @@
                    :eta (float 0.01)        ;;  learning_rate
                    :gama (float 0.4)         ;;  margin around zero              ;0.4
                    :epsilon (float 0.049)    ;;  level of error that is allowed.
-                   :mu (float 0.9 )}))
+                   :mu (float 0.9 )}))       ;;learning modifier round zero
 
 (comment "This is how we will make stuff wait for each other"
 (def marker11 (pp_enqueue_marker pp0))
