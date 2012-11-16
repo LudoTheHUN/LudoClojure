@@ -6,10 +6,13 @@ LudoClojure
 This is my attempt to learn Clojure, while applying it to the most difficult problem I could think of:
 ie: "write a program that will play any game, meaningfully."
 Some guiding thoughts:
-http://www.lsm.tugraz.at/papers/lsm-nc-130.pdf
-http://www.idsia.ch/~juergen/sice2009.pdf
+http://www.lsm.tugraz.at/papers/lsm-nc-130.pdf          
+http://www.igi.tugraz.at/psfiles/pdelta-journal.pdf     
 http://www.coneural.org/florian/papers/05_RL_for_spiking_NNs.pdf
-http://www.igi.tugraz.at/psfiles/pdelta-journal.pdf
+http://www.idsia.ch/~juergen/sice2009.pdf
+
+
+pperceptron.clj is probably worlds first openCL implementation of a parallel perceptron and probably the only thing of any value in this repo.
 
 
 .
@@ -53,20 +56,20 @@ scp pom.xml calx-0.4.0-SNAPSHOT.jar clojars@clojars.org:
 
 ## BIG TODOs:
 Tool up!
-  DONE: Consider Eclipse with clojure plugin.   ...urgh, just try it, however good notepad++ is (my opinion has changed, no going back)
+  DONE: Consider Eclipse with clojure plugin. It's not bad at all.
   NA: Have a look at Casandra?
   NA: Have a look at Storm https://github.com/nathanmarz/storm/wiki/Clojure-DSL  (great model for epic scale and stability)
 Wrap openCL functionality further.
   (got started with Rifle idiom) DSL for openCL transformations over neurons, think openCL kernel writng + executing, wrapped, based on minimal defining statements.
-  Wrap around the onloading, offloading of data into clojure (or java) datatypes into openCL
+  Done: Wrap around the onloading, offloading of data into clojure (or java) datatypes into openCL
   (nah...) Drop openCL? Go lisp only? Let Moore take care of performace hit?... or hide openCL completely so it does not matter?
   Break kernel operations down so that each enqueue-kernel does very little work that is very specific, dum and DSL'able?
-    Identify simplest operations, think of map-reduce stages?
+  Identify simplest operations, think of map-reduce stages?
 Use Clojure better
   (got some experience of this now) Break out into files per focus area, (ns) is your friend
-  UI should live somewhere else, too much OO crud near swing.
-  For UI, look at CojureScript
-  Use paralelisim, safely - Developed Spindle framework.
+  UI should live somewhere else, too much OO crud near swing. Picking up quil for UI.
+  (nah?) For UI, look at CojureScript
+  Done, but too slow. Use paralelisim, safely - Developed Spindle framework. True madness.
   Be sure you are 'doing it right', go idiomatic.
 Structure
   Define the program data structures
@@ -75,19 +78,20 @@ Structure
     Think of partially ordered sets
     Think through if labda calculus can help to 'compose' Liquid State Machine itterations.
   Seperate out state
-    Use persistant data structure where possible
+    Use persistant data structure where possible (nah. v slow vs openCL)
 Think process level paralisim
   A single GPU will not be enough, for a while yet.
+  Focusing on a single GPU only for now.
+  Take it to the client side cloud with WebCL.
 Testing
   Always last on the list
   DONE, much more comfortable with creating tests now - Find ways to make it the first thing on the list
   Test the behaviour...
   Create toy problems that demonstrate solution being reached.
-  How??
 
 ## Usage
 
-Don't use it
+Don't use it, unless you are me.
 
 ## License
 
