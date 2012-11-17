@@ -3,14 +3,15 @@
 (:use quil.core)
 (:use [LudoClojure.pperceptron]))
 
+
 (def pp0 (make_pp {:input_size 3
                    :outputs_size 2
-                   :pp_size 3
-                   :rho 1                    ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
-                   :eta (float 0.005)        ;;  learning_rate
-                   :gama (float 0.4)         ;;  margin around zero              ;0.4
-                   :epsilon (float 0.009)    ;;  level of error that is allowed.
-                   :mu (float 0.9 )}))
+                   :pp_size 6
+                   :rho 2               ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
+                   :eta (float 0.01)    ;;  learning_rate
+                   :gama (float 0.1)    ;;  margin around zero              ;0.4
+                   :epsilon (float 0.1) ;;  level of error that is allowed.
+                   :mu (float 0.2 )}))  ;;  learning modifier around zero   ;0.9
 
 (def frmecounter (atom 0))
 (def xpoint (atom 0))
@@ -32,22 +33,31 @@
                       (point @xpoint (+ (/ (* x (height)) 4) (/ (height) 2) ))))
             pp_vec))))
 
+(def pp_answers [
+                 [[-1.0 -1.0 -1.0]   [-1.0  1.0]]
+                 [[ 1.0 -1.0 -1.0]   [ 1.0 -1.0]]
+                 [[ 1.0  1.0 -1.0]   [-1.0  1.0]]
+                 [[-1.0  1.0 -1.0]   [ 1.0 -1.0]]
+                 [[ 0.0  0.0 -1.0]   [ 1.0  1.0]]
+                 [[ 0.0  1.0 -1.0]   [ 0.0  1.0]]
+                 [[ 0.0 -1.0 -1.0]   [ 1.0  0.0]]
+                 [[ 1.0  0.0 -1.0]   [ 0.0  0.0]]
+                 ])
+
 (defn learnthis []
- (let [picker (- (random 4) 1)
-       answers  [
-                 [[-1.0 -1.0 -1.0]   [-1.0 1.0 ]]
-                 [[ 1.0 -1.0 -1.0]   [ 1.0 -1.0 ]]
-                 [[ 1.0  1.0 -1.0]   [-1.0 -1.0 ]]
-                 [[-1.0  1.0 -1.0]   [ 1.0 1.0]]
-                 ]
-       q  (first (nth answers picker))
-       a  (second (nth answers picker))]
+ (let [picker  (random (count pp_answers))
+       q  (first (nth pp_answers picker))
+       a  (second (nth pp_answers picker))]
    ;(println  q a)
-  (pp_train_and_answer pp0 q a)  
+  (pp_train_and_answer pp0 q a {:gama (float 0.0)})  
 )) ; (learnthis)
 
-(pp_answer pp0 [-1.0 -1.0 -1.0] ) ;[-1.0 1.0]
+(defn all_answers []  "ask all questions, get all answers, show them side by side")
+  
+(pp_answer pp0 [-1.0 -1.0 -1.0] )
 (pp_answer pp0 [-1.0  1.0 -1.0] ) ;[ 1.0 -1.0]
+(pp_answer pp0 [0.9  0.4 -1.0] )
+(pp_answer pp0 [0.0  1.0 -1.0] )  ;[-1.0 1.0]
 (pp_readout pp0 :vecProductResult_buf)
 (pp_readout pp0 :alpha_buf)
 
