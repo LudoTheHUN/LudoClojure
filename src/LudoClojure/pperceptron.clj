@@ -499,10 +499,11 @@ down to between -1.0 and 1.0"
                    :epsilon (float 0.049)    ;;  level of error that is allowed.
                    :mu (float 0.9 )}))
 
+a_pp
 @(:pp_opencl_env ^Pperceptron a_pp)
 (:pp_queue a_pp)
 (:pp_answer_buf a_pp)
-(pp_readout a_pp :input_data_buf)
+(time (pp_readout a_pp :input_data_buf))
 )
 
 

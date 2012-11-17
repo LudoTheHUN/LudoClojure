@@ -33,18 +33,20 @@
             pp_vec))))
 
 (defn learnthis []
- (let [picker (- 4 1)
-       answers  [[[-1.0 -1.0 -1.0]   [-1.0 1.0]]
-                 [[ 1.0 -1.0 -1.0]   [ 1.0 1.0]]
-                 [[ 1.0  1.0 -1.0]   [-1.0 1.0]]
-                 [[-1.0  1.0 -1.0]   [ 1.0 -1.0]]]
+ (let [picker (- (random 4) 1)
+       answers  [
+                 [[-1.0 -1.0 -1.0]   [-1.0 1.0 ]]
+                 [[ 1.0 -1.0 -1.0]   [ 1.0 -1.0 ]]
+                 [[ 1.0  1.0 -1.0]   [-1.0 -1.0 ]]
+                 [[-1.0  1.0 -1.0]   [ 1.0 1.0]]
+                 ]
        q  (first (nth answers picker))
        a  (second (nth answers picker))]
    ;(println  q a)
   (pp_train_and_answer pp0 q a)  
 )) ; (learnthis)
 
-(pp_answer pp0 [-1.0 -1.0 -1.0] ) ;[-1.0 0.0]
+(pp_answer pp0 [-1.0 -1.0 -1.0] ) ;[-1.0 1.0]
 (pp_answer pp0 [-1.0  1.0 -1.0] ) ;[ 1.0 -1.0]
 (pp_readout pp0 :vecProductResult_buf)
 (pp_readout pp0 :alpha_buf)
