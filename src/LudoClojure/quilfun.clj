@@ -3,6 +3,12 @@
 (:use quil.core)
 (:use [LudoClojure.pperceptron]))
 
+;TODO
+;lib for displaying pp's in quil
+  ;TestHelpers, build out functions for loading on training pairs, easily and in other libs (eg: here).
+  ;Colour each output of :vecProductResult_buf
+  ;display answers vs correct answers to see errors globally
+  ;parameter space over 2D
 
 (def pp0 (make_pp {:input_size 3
                    :outputs_size 2
@@ -41,15 +47,18 @@
                  [[ 0.0  0.0 -1.0]   [ 1.0  1.0]]
                  [[ 0.0  1.0 -1.0]   [ 0.0  1.0]]
                  [[ 0.0 -1.0 -1.0]   [ 1.0  0.0]]
-                 [[ 1.0  0.0 -1.0]   [ 0.0  0.0]]
-                 ])
+                 [[ 1.0  0.0 -1.0]   [ 0.0  1.0]]
+                  ])
+
+
+
 
 (defn learnthis []
  (let [picker  (random (count pp_answers))
        q  (first (nth pp_answers picker))
        a  (second (nth pp_answers picker))]
    ;(println  q a)
-  (pp_train_and_answer pp0 q a {:gama (float 0.0)})  
+  (pp_train_and_answer pp0 q a {:gama (float 0.05)})  
 )) ; (learnthis)
 
 (defn all_answers []  "ask all questions, get all answers, show them side by side")
