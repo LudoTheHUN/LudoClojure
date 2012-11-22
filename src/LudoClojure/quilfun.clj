@@ -20,7 +20,8 @@
                    :mu (float 0.2 )}))  ;;  learning modifier around zero   ;0.9
 
 (def frmecounter (atom 0))
-(def xpoint (atom 0))
+(def xpoint      (atom 0))
+(def gama        (atom 0.05))
 
 
 (pp_train_and_answer pp0 [1.0 0.0 -1.0] [-1.0 1.0])
@@ -48,20 +49,69 @@
                  [[ 0.0  1.0 -1.0]   [ 0.0  1.0]]
                  [[ 0.0 -1.0 -1.0]   [ 1.0  0.0]]
                  [[ 1.0  0.0 -1.0]   [ 0.0  1.0]]
-                  ])
+                  ])   ;Array of Input, correct answer training examples.
 
 
 
 
-(defn learnthis []
+(defn learnthis [a_val]
  (let [picker  (random (count pp_answers))
        q  (first (nth pp_answers picker))
        a  (second (nth pp_answers picker))]
    ;(println  q a)
-  (pp_train_and_answer pp0 q a {:gama (float 0.05)})  
+  (pp_train_and_answer pp0 q a {:gama (float a_val) :mu (float a_val )})  
 )) ; (learnthis)
 
-(defn all_answers []  "ask all questions, get all answers, show them side by side")
+(defn all_answers "ask all questions, get all answers, show them side by side
+     (all_answers pp_answers )" 
+  [pp_questions]
+  (vec (map 
+          (fn [question] 
+            (let [answer (pp_answer pp0 (first question))]
+            [(first question) (second question) answer (= (second question) answer)])) pp_questions))
+  )
+
+;(pprint (all_answers pp_answers ))
+
+(defn create_float_range [size fraction] "list of floats
+     (create_float_range 21 10)
+     (count (create_float_range 41 20))
+     eg: (map (fn[x] (float (/ (- x 10) 10))) (range 21))"
+  (let [halfsize (int (/ size 2))]
+   (map (fn[x] (float (/ (- x halfsize) fraction))) (range size)))
+  )
+
+;;(create_float_range 1001 500)
+
+(defn all-pairs [sq] (for [i sq j sq] [i j]))   ;TGFSO
+
+;;(create_float_range (create_float_range 1001 500))
+
+(defn create_2d_pp_questions [size fraction]
+  "(create_2d_pp_questions 5 2)"
+  (let [float_list (create_float_range size fraction)
+        pairs  (all-pairs float_list)]
+    (map (fn [x] (vector (conj x -0.1) [0.0])) pairs)
+    ;(reduce (fn [array afloat] (conj array float_list)) []  float_list)
+  ))
+
+;(all_answers (create_2d_pp_questions 5 2))
+;(time (all_answers (create_2d_pp_questions 21 10)))
+(def many_answers_done (time (all_answers (create_2d_pp_questions 41 20))))
+;(count (create_2d_pp_questions 21 10))
+;(count (create_2d_pp_questions 41 20))
+
+(defn draw_answers [q_and_As]
+
+)
+
+
+
+ ;(count (create_2d_pp_questions 41 20))
+;(count (create_2d_pp_questions 101 50))
+ ;(map (fn[x] (float (/ (- x 10) 10))) (range 21))
+;(time (count (all_answers (create_2d_pp_questions 101 50))))
+ (/ 4264 10201.0)
   
 (pp_answer pp0 [-1.0 -1.0 -1.0] )
 (pp_answer pp0 [-1.0  1.0 -1.0] ) ;[ 1.0 -1.0]
@@ -69,15 +119,6 @@
 (pp_answer pp0 [0.0  1.0 -1.0] )  ;[-1.0 1.0]
 (pp_readout pp0 :vecProductResult_buf)
 (pp_readout pp0 :alpha_buf)
-
-
-(defn setup []
-  (smooth)                          ;;Turn on anti-aliasing
-  (frame-rate 100)                    ;;Set framerate to 1 FPS
-  (background 100))                 ;;Set the background colour to
-                                    ;;  a nice shade of grey.
-       ;;Draw a circle at x y with the correct diameter
-
 
 
 (defn update_xpoint! [] (swap! xpoint (fn [x] (if (> x (width))
@@ -92,10 +133,18 @@
   (if (= @xpoint 0)
   (background 100)))
 
+
+(defn mouse_control_atom_x [an_atom]
+   (if (= (mouse-state) true)
+      (let [mouse_val (mouse-x)]
+       (swap! an_atom (fn [_] (float (/ mouse_val 500)) )))))
+
+
 (defn draw_xpoints []
    (fill 250 0 50)
    (stroke 255 0 0)
    (rect @xpoint (/ (+ (random (height)) (* 0.5 (height))) 2)  3 5))
+
 
 (defn write_out_text []
    (fill 250 0 50)
@@ -104,21 +153,48 @@
    (text (str @frmecounter) 10 10 )
    (text (str @xpoint) 70 10 ))
 
+
+(defn writoutstuff [txt x y width height]
+   (fill 250 0 50)
+   (rect x y width height)
+   (fill 255)
+   (text (str txt) (+ x 3) (+ 10 y) )
+   )
+
+
+;; START QUIL DRAWING
+
+(defn setup []
+  (smooth)                          ;;Turn on anti-aliasing
+  (frame-rate 60)                    ;;Set framerate to 1 FPS
+  (background 100))                 ;;Set the background colour to
+                                    ;;  a nice shade of grey.
+       ;;Draw a circle at x y with the correct diameter
+
 (defn draw []
   (clearscreen)
   (stroke 255 0 0)
   ;(stroke (random 255) (random 255) (random 255)) ;;Set the stroke colour to a random grey
-
   ; (point (random (width)) (random (height)))
- ; (doall (map (fn [x] (text (str "fo" x) (random 255) (random 255) )) (range 0 100)))
- ;(map (fn [x] (point (random (width) (random (height))))) (range 0 10))
+  ; (doall (map (fn [x] (text (str "fo" x) (random 255) (random 255) )) (range 0 100)))
+  ;(map (fn [x] (point (random (width) (random (height))))) (range 0 10))
   ; (dorun (map (fn [_] (point (random (width)) (random (height)))) (range 0 1000)))  ;shimmer background
    (swap! frmecounter inc)
-   (learnthis)
+   (learnthis @gama)
    (update_xpoint!)
    ;(draw_xpoints)
-   (write_out_text)
+   ;(write_out_text)
    (draw_pp_vec_points pp0)
+   (mouse_control_atom_x gama)
+
+
+   (writoutstuff (str @frmecounter)      0 0  100 10)
+   (writoutstuff (str @xpoint)           0 10 100 10)
+   (writoutstuff (str "game is: " @gama) 0 (- (height) 50) 100 10)
+   (writoutstuff (mouse-state)           0 (- (height) 40) 100 10)
+   (writoutstuff (mouse-y)               0 (- (height) 30) 100 10)
+   (writoutstuff (mouse-x)               0 (- (height) 20) 100 10)
+   (writoutstuff (mouse-button)          0 (- (height) 10) 100 10)
   )
 
 (defsketch example                  ;;Define a new sketch named example
