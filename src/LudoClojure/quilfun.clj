@@ -1,7 +1,7 @@
 (ns LudoClojure.quilfun
  ; (:use quil.core))
 (:use quil.core)
-(:use [LudoClojure.pperceptron]))
+(:use [LudoClojure.pperceptron]))  ;;TODO put down an as here
 
 ;TODO
 ;lib for displaying pp's in quil
@@ -41,18 +41,28 @@
             pp_vec))))
 
 (def pp_answers [
-                 [[-1.0 -1.0 -1.0]   [-1.0  1.0]]
-                 [[ 1.0 -1.0 -1.0]   [ 1.0 -1.0]]
-                 [[ 1.0  1.0 -1.0]   [-1.0  1.0]]
-                 [[-1.0  1.0 -1.0]   [ 1.0 -1.0]]
-                 [[ 0.0  0.0 -1.0]   [ 1.0  1.0]]
-                 [[ 0.0  1.0 -1.0]   [ 0.0  1.0]]
+                 [[-1.0 -1.0 -1.0]   [ 1.0  1.0]]
+                 [[ 1.0 -1.0 -1.0]   [-1.0 -1.0]]
+                 [[ 1.0  1.0 -1.0]   [ 1.0  1.0]]
+                 [[-1.0  1.0 -1.0]   [-1.0 -1.0]]
+                 
+                [[ 0.0  0.0 -1.0]   [ 1.0  1.0]]
+                 [[ 0.0  1.0 -1.0]   [ 1.0  1.0]]
                  [[ 0.0 -1.0 -1.0]   [ 1.0  0.0]]
-                 [[ 1.0  0.0 -1.0]   [ 0.0  1.0]]
+                 [[ 1.0  0.0 -1.0]   [ 1.0  1.0]]
+                 [[-1.0  0.0 -1.0]   [ 1.0  1.0]]
+                 [[ 0.5  0.0 -1.0]   [-1.0  1.0]]
                   ])   ;Array of Input, correct answer training examples.
 
+;(pprint (all_answers pp_answers ))
 
-
+(def pp_answers [
+                 [[-0.5 -0.5 -1.0]   [ 1.0  1.0]]
+                 [[ 0.5 -0.5 -1.0]   [-1.0 -1.0]]
+                 [[-0.5  0.5 -1.0]   [-1.0 -1.0]]
+                 [[ 0.5  0.5 -1.0]   [ 1.0  1.0]]
+                  ])
+;;(all_answers pp_answers)
 
 (defn learnthis [a_val]
  (let [picker  (random (count pp_answers))
@@ -97,20 +107,52 @@
 
 ;(all_answers (create_2d_pp_questions 5 2))
 ;(time (all_answers (create_2d_pp_questions 21 10)))
-(def many_answers_done (time (all_answers (create_2d_pp_questions 41 20))))
+(def many_answers_done (time (all_answers (create_2d_pp_questions 201 100))))
 ;(count (create_2d_pp_questions 21 10))
 ;(count (create_2d_pp_questions 41 20))
 
-(defn draw_answers [q_and_As]
+(defn regularize_color 
+  ([value]
+    (regularize_color value -1 1))
+  ([value min max]
+    (let [colourval (* (- value min) (/ 255.0 (- max min) ))]
+      (cond (> colourval 255.0) 255
+            (< colourval 0.0) 0
+            :else (int colourval)))))
 
-)
+
+(defn draw_answers []
+(if (= (mod @xpoint 200) 1)
+  (let [q_and_As (all_answers 
+                   ;(create_2d_pp_questions 201 100)
+                   pp_answers
+                   )]
+  (dorun (map (fn [q_and_a] (do
+               (let [col (regularize_color (first (nth q_and_a 2)))]
+                (stroke col col col)
+                (fill col col col)
+                (rect (+ @xpoint 100.0 (* 100.0 (first (first q_and_a)))) (+ (* 100.0 (second (first q_and_a))) 200.0) 1 1)
+                ;(point (+ @xpoint 100.0 (* 100.0 (first (first q_and_a)))) (+ (* 100.0 (second (first q_and_a))) 200.0))
+                )))
+           q_and_As)))
+  (do 
+                (stroke 255 0 0)
+                (fill 255 0 0)
+    (point (+ @xpoint 100.0 (* 100.0 1.0)) (+ (* 100.0 1.0) 200.0))
+    )
+  ))
 
 
+
+;;(draw_answers many_answers_done)
 
  ;(count (create_2d_pp_questions 41 20))
 ;(count (create_2d_pp_questions 101 50))
  ;(map (fn[x] (float (/ (- x 10) 10))) (range 21))
-;(time (count (all_answers (create_2d_pp_questions 101 50))))
+;(time (count (all_answers pp_answers)))
+ 
+ ;  (count (filter true? (map (fn [x] (nth x 3)) (all_answers pp_answers))))
+ 
  (/ 4264 10201.0)
   
 (pp_answer pp0 [-1.0 -1.0 -1.0] )
@@ -137,7 +179,8 @@
 (defn mouse_control_atom_x [an_atom]
    (if (= (mouse-state) true)
       (let [mouse_val (mouse-x)]
-       (swap! an_atom (fn [_] (float (/ mouse_val 500)) )))))
+       (swap! an_atom (fn [_] (float (/ mouse_val 500)) )))
+      nil))
 
 
 (defn draw_xpoints []
@@ -188,20 +231,31 @@
    (mouse_control_atom_x gama)
 
 
+   
+   
    (writoutstuff (str @frmecounter)      0 0  100 10)
    (writoutstuff (str @xpoint)           0 10 100 10)
-   (writoutstuff (str "game is: " @gama) 0 (- (height) 50) 100 10)
+   
+   
+   (writoutstuff (str "Acorr: " (count (filter true? (map (fn [x] (nth x 3)) (all_answers pp_answers)))))
+                                         0 (- (height) 70) 100 10)
+   (writoutstuff (str "Q's   : " (count pp_answers))
+                                         0 (- (height) 60) 100 10)
+   (writoutstuff (str "gama is: " @gama) 0 (- (height) 50) 100 10)
    (writoutstuff (mouse-state)           0 (- (height) 40) 100 10)
    (writoutstuff (mouse-y)               0 (- (height) 30) 100 10)
    (writoutstuff (mouse-x)               0 (- (height) 20) 100 10)
    (writoutstuff (mouse-button)          0 (- (height) 10) 100 10)
+   
+   ;;;(draw_answers many_answers_done)
+   (draw_answers)
   )
 
 (defsketch example                  ;;Define a new sketch named example
   :title "Oh so many grey points"  ;;Set the title of the sketch
   :setup setup                      ;;Specify the setup fn
   :draw draw                        ;;Specify the draw fn
-  :size [323 200])                  ;;You struggle to beat the golden ratio
+  :size [323 600])                  ;;You struggle to beat the golden ratio
 
 
 
