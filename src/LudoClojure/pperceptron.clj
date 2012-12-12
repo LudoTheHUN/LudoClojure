@@ -242,7 +242,8 @@ else {
 
 ;;Compile openCL kernels into the opencl environment
 ;;TODO should make this a function, so this happens only at main 'run time'
-(opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
+;;(opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
+(opencl_compile_default)
 
 ;;(make_random_float_array 100 -0.5 1)
 
@@ -518,28 +519,7 @@ a_pp
 
 
 
-;Runtime runtime = Runtime.getRuntime();
-;
-;    NumberFormat format = NumberFormat.getInstance();
-;
-;    StringBuilder sb = new StringBuilder();
-;    long maxMemory = runtime.maxMemory();
-;    long allocatedMemory = runtime.totalMemory();
-;    long freeMemory = runtime.freeMemory();
-  ;;;  becomes
-(let [runtime (Runtime/getRuntime)]
 
- (println (.freeMemory runtime))
- (println (.totalMemory  runtime))
- (println (.maxMemory  runtime))
- (.availableProcessors (Runtime/getRuntime))
- (.gc runtime)
- ;;(.halt runtime 1)
-  )
-
-
-;;(new (MemoryNotificationInfo/MemoryNotificationInfo )
-;;management/MemoryNotificationInfo
 
 
 

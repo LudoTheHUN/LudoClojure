@@ -1,4 +1,4 @@
-(ns LudoClojure.test.testpperceptron
+(ns LudoClojure.test.pperceptron
   (:use [LudoClojure.opencl-utils])
   (:use [LudoClojure.pperceptron])
   (:use [LudoClojure.pperceptron-testhelpers])
@@ -9,6 +9,8 @@
 
 ;;(use 'calx)
 (def testdata (make_test_array 20 40 3))
+
+
 
 
 (deftest test_manual_pp_test_pp0

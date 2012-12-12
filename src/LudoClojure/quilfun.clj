@@ -12,7 +12,7 @@
 
 (def pp0 (make_pp {:input_size 3
                    :outputs_size 2
-                   :pp_size 6
+                   :pp_size 100
                    :rho 2               ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
                    :eta (float 0.01)    ;;  learning_rate
                    :gama (float 0.1)    ;;  margin around zero              ;0.4
@@ -34,24 +34,53 @@
 (createcolours pp0)
 
 (defn draw_pp_vec_points [pp]
-  (let [pp_vec (pp_readout pp :alpha_buf)]
-   (dorun (map (fn [x] (do 
-                      (stroke 0 11 255)
+  (let [pp_vec (pp_readout pp :alpha_buf)
+        pp_vec_size (count pp_vec)]
+   (dorun (map (fn [x col] (do 
+                      (stroke (* 255 (/ col pp_vec_size))
+                              (mod (* col 77) 255)
+                              (mod (* col 33) 255))   ;;RAINBOWS!!!
                       (point @xpoint (+ (/ (* x (height)) 4) (/ (height) 2) ))))
-            pp_vec))))
+            pp_vec (range pp_vec_size)))))
+
+(map (fn [x y] (println x y)) [1 2 3] [5 6 7])
+
 
 (def pp_answers [
+                 [[-0.5  -0.5 -1.0]   [-1.0  1.0]]
+                 [[ 0.5  -0.5 -1.0]   [-1.0  1.0]]
+                 [[ 0.0   0.0 -1.0]   [-1.0  1.0]]
+                 [[ 0.7   0.7 -1.0]   [-1.0  1.0]]
+                 [[ 0.0   0.7 -1.0]   [-1.0  1.0]]
+                 [[-0.5   0.5 -1.0]   [-1.0  1.0]]
+                 [[ 0.0  -0.5 -1.0]   [ 1.0  1.0]]
+                 
+               
+                 [[ 0.0  1.0 -1.0]   [ 1.0  1.0]]
+                 [[ 0.0 -1.0 -1.0]   [ 1.0  1.0]]
+                 [[ 1.0  0.0 -1.0]   [ 1.0  1.0]]
+                 [[-1.0  0.0 -1.0]   [ 1.0  1.0]]
                  [[-1.0 -1.0 -1.0]   [ 1.0  1.0]]
+                 [[ 1.0  1.0 -1.0]   [ 1.0  1.0]]
+                 [[-1.0  1.0 -1.0]   [ 1.0  1.0]]
+                 [[ 1.0 -1.0 -1.0]   [ 1.0  1.0]]
+                  ])   ;Array of Input, correct answer training examples.
+
+
+
+
+(def pp_answers [
+                 [[-1.0 -1.0 -1.0]   [-1.0  1.0]]
                  [[ 1.0 -1.0 -1.0]   [-1.0 -1.0]]
                  [[ 1.0  1.0 -1.0]   [ 1.0  1.0]]
                  [[-1.0  1.0 -1.0]   [-1.0 -1.0]]
                  
-                [[ 0.0  0.0 -1.0]   [ 1.0  1.0]]
+                 [[ 0.0  0.0 -1.0]   [ 1.0  1.0]]
                  [[ 0.0  1.0 -1.0]   [ 1.0  1.0]]
-                 [[ 0.0 -1.0 -1.0]   [ 1.0  0.0]]
+                 [[ 0.0 -1.0 -1.0]   [-1.0  1.0]]
                  [[ 1.0  0.0 -1.0]   [ 1.0  1.0]]
                  [[-1.0  0.0 -1.0]   [ 1.0  1.0]]
-                 [[ 0.5  0.0 -1.0]   [-1.0  1.0]]
+                 [[ 0.7  0.6 -1.0]   [-1.0  1.0]]
                   ])   ;Array of Input, correct answer training examples.
 
 ;(pprint (all_answers pp_answers ))
@@ -61,6 +90,13 @@
                  [[ 0.5 -0.5 -1.0]   [-1.0 -1.0]]
                  [[-0.5  0.5 -1.0]   [-1.0 -1.0]]
                  [[ 0.5  0.5 -1.0]   [ 1.0  1.0]]
+                  ])
+
+(def pp_answers [
+                 [[-0.5 -0.5 -1.0]   [-1.0  1.0]]
+                 [[ 0.5 -0.5 -1.0]   [ 1.0 -1.0]]
+                 [[-0.5  0.5 -1.0]   [ 1.0 -1.0]]
+                 [[ 0.5  0.5 -1.0]   [-1.0  1.0]]
                   ])
 ;;(all_answers pp_answers)
 
@@ -107,7 +143,7 @@
 
 ;(all_answers (create_2d_pp_questions 5 2))
 ;(time (all_answers (create_2d_pp_questions 21 10)))
-(def many_answers_done (time (all_answers (create_2d_pp_questions 201 100))))
+(def many_answers_done (time (all_answers (create_2d_pp_questions 11 5))))
 ;(count (create_2d_pp_questions 21 10))
 ;(count (create_2d_pp_questions 41 20))
 
@@ -121,24 +157,41 @@
             :else (int colourval)))))
 
 
-(defn draw_answers []
-(if (= (mod @xpoint 200) 1)
+(defn draw_answers [pp_answers]
+(if ;(= (mod @xpoint 10) 1)
+    true
   (let [q_and_As (all_answers 
                    ;(create_2d_pp_questions 201 100)
                    pp_answers
                    )]
+    ;draw answers
   (dorun (map (fn [q_and_a] (do
                (let [col (regularize_color (first (nth q_and_a 2)))]
                 (stroke col col col)
                 (fill col col col)
-                (rect (+ @xpoint 100.0 (* 100.0 (first (first q_and_a)))) (+ (* 100.0 (second (first q_and_a))) 200.0) 1 1)
+                (rect (+ 
+                        ;@xpoint 
+                        200.0 (* 100.0 (first (first q_and_a)))) (+ (* 100.0 (second (first q_and_a))) 200.0) 8 8)
                 ;(point (+ @xpoint 100.0 (* 100.0 (first (first q_and_a)))) (+ (* 100.0 (second (first q_and_a))) 200.0))
                 )))
-           q_and_As)))
+           q_and_As))
+    ;draw correct ansers inside
+  (dorun (map (fn [q_and_a] (do
+               (let [col (regularize_color (first (nth q_and_a 1)))]
+                (stroke col col col)
+                (fill col col col)
+                (rect (+ 
+                        ;@xpoint 
+                        200.0 (* 100.0 (first (first q_and_a)))) (+ (* 100.0 (second (first q_and_a))) 200.0) 4 4)
+                ;(point (+ @xpoint 100.0 (* 100.0 (first (first q_and_a)))) (+ (* 100.0 (second (first q_and_a))) 200.0))
+                )))
+           q_and_As))
+  
+  )
   (do 
-                (stroke 255 0 0)
-                (fill 255 0 0)
-    (point (+ @xpoint 100.0 (* 100.0 1.0)) (+ (* 100.0 1.0) 200.0))
+   ;             (stroke 255 0 0)
+   ;             (fill 255 0 0)
+   ; (point (+ @xpoint 100.0 (* 100.0 1.0)) (+ (* 100.0 1.0) 200.0))
     )
   ))
 
@@ -247,8 +300,10 @@
    (writoutstuff (mouse-x)               0 (- (height) 20) 100 10)
    (writoutstuff (mouse-button)          0 (- (height) 10) 100 10)
    
-   ;;;(draw_answers many_answers_done)
-   (draw_answers)
+ ;  (draw_answers many_answers_done)
+   
+   (if (= (mod @xpoint 10) 1) (draw_answers (create_2d_pp_questions 11 5)))
+   (draw_answers pp_answers)
   )
 
 (defsketch example                  ;;Define a new sketch named example

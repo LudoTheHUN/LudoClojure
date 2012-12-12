@@ -6,7 +6,7 @@
 ;(use 'calx)
 
 
-(println "loading opencl-utils")
+(println "start: loading opencl-utils")
 
 ;;Make the openCL environment here.  Make it just once, lets users add queues if need be.
 
@@ -41,6 +41,8 @@
             (conj m {:progs (lg_compile-program (:devices m) openclprog (:context m))}))))
 
 
+
+
 ;;test with (opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels))
 
 (defn buf_elements [buf]
@@ -63,6 +65,8 @@ are defined. User could choose to bootstrap a spindle with only some subset of
 kernels and loose guarantee of functionality."}
 (atom {}))
 
+
+
 (defn add_kernel_specs [kernels_map kernel_specsmap]
 ^{:doc "Adds kernel specs to a kernel spec map"}
    (swap! kernels_map (fn [kernels_map] (conj kernels_map kernel_specsmap))))
@@ -73,6 +77,11 @@ kernels and loose guarantee of functionality."}
       (map :body 
          (sort-by :postion 
             (vals @a_kernels_map)))))
+
+
+(defn opencl_compile_default [] 
+ ^{:doc "Compiles the default environment and kernels"}
+  (opencl_env_compileprogs opencl_env (get_openCL_from_kernels opencl_kernels)))
 
 
 ;;To add a kernel then do:
@@ -192,5 +201,6 @@ __kernel void timestwoSlowly(
 
 ;;TODO add queue branching and merging helpers here.
 
+(println "done: loading opencl-utils")
 
 

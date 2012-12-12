@@ -1,7 +1,9 @@
 (ns LudoClojure.utils
 )
 
-(println "loading utils")
+(println "start: loading utils")
+
+;(def opencl_kernels "boom")
 
 (defn make_random_float_array [size booster seed]
    (doall
@@ -37,6 +39,35 @@
    :else n))
 
 
+
+
+
+
+
+;Runtime runtime = Runtime.getRuntime();
+;
+;    NumberFormat format = NumberFormat.getInstance();
+;
+;    StringBuilder sb = new StringBuilder();
+;    long maxMemory = runtime.maxMemory();
+;    long allocatedMemory = runtime.totalMemory();
+;    long freeMemory = runtime.freeMemory();
+  ;;;  becomes
+(let [runtime (Runtime/getRuntime)]
+
+ (println "freeMemory  " (.freeMemory runtime))
+ (println "totalMemory "(.totalMemory  runtime))
+ (println "maxMemory   "(.maxMemory  runtime))
+ (.availableProcessors (Runtime/getRuntime))
+ (.gc runtime)
+ ;;(.halt runtime 1)
+  )
+
+;;(new (MemoryNotificationInfo/MemoryNotificationInfo )
+;;management/MemoryNotificationInfo
+
+
+(println "done: loading utils")
 
 
 
