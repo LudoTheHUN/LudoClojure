@@ -151,27 +151,53 @@ debug_infobuff[gid]= random_value;
 )
 
 
-(defn make_liquid [options]
-   (let [{:keys [liquid_opencl_env liquid_queue liquidsize eta] 
+
+(defn make_liquid 
+"Returns a liquid state machine"
+  [options]
+   (let [{:keys [liquid_opencl_env liquid_queue liquidsize eta connections] 
                  :or 
-                {liquid_opencl_env cl-utils/opencl_env 
+                {liquid_opencl_env cl-utils/opencl_env
                  liquid_queue :queue
                  liquidsize 64
                  eta (float 0.001)
+                 connections 5
                    ;The default queue in the opencl_env
                  }
                 } options
-         
-         
+          liquidState1_a_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
+          liquidState1_b_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
+          liquidState2_a_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
+          liquidState2_b_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
+          conectivity_buf     (doall (lg_wrap (:context @liquid_opencl_env) (utils/random_conectivity_seedZ liquidsize) :int32-le))
+          debug_infobuff_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :int32-le))
          ]
    (println liquidsize eta liquid_queue)
-   ))
+   (LiquidRecord. 
+                         liquid_opencl_env
+                         liquid_queue
+                         liquidState1_a_buf
+                         liquidState1_b_buf
+                         liquidState2_a_buf
+                         liquidState2_b_buf
+                         conectivity_buf
+                         debug_infobuff_buf
+                         connections
+                         liquidsize)))
 
+
+
+
+(quote
 (make_liquid {:liquidsize 32})
+(def myliquid (make_liquid {}))
+)
+
 
 
 ;(doall (lg_wrap (:context @opencl_env) (make_random_float_array size_of_alpha_needed -0.5 1) :float32-le))
 ;(def conectivity     (lg_wrap (:context @cl-utils/opencl_env) (random_conectivity_seedZ 14) :int32-le))
+
 
 
 
@@ -182,6 +208,9 @@ debug_infobuff[gid]= random_value;
 
 
 ;;   (time (run_liquid! globalsize connections sourceOpenCL)) (show_diagnostics)
+
+(quote 
+
 
 (def sourceOpenCL
   "
@@ -416,7 +445,7 @@ __kernel void flopliquid(
       (def checkpoint1_end (. System (nanoTime)))
       "Terminating liquid"
       ;Main with-cl loop ends here
-    ;(println "to infinity, and beyond:" k)
+    ;(println "to infinity, and beyond" k)
    ))
 
 (defn show_diagnostics []
@@ -441,12 +470,14 @@ __kernel void flopliquid(
 ;;Billion operations per second...
  ;     (total operations                       ) (total seconds                                        )  billion   )
 
+;end on quote
+)
 
 (println "All Looks OK code wise... in liquid.clj")
 
-;run this:
+;run this
 ;;TODO, be able to 'run' things within a threaded with-cl (that's in a loop), by running a function....
 ;;TODO change the definiton of that runs within the winth-cl, while it's running by redefining the call being made.... via macros or atoms
-;;TODO: DONE: Have a loop that loops over each statement within with-cl, quickly checking if it should be executed or not, if yes, executing, seting state back to 'done'
+;;TODO DONE: Have a loop that loops over each statement within with-cl, quickly checking if it should be executed or not, if yes, executing, seting state back to 'done'
 
 

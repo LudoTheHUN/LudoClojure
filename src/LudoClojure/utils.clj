@@ -53,6 +53,8 @@
 ;    long allocatedMemory = runtime.totalMemory();
 ;    long freeMemory = runtime.freeMemory();
   ;;;  becomes
+
+(defn report_on_vm []
 (let [runtime (Runtime/getRuntime)]
 
  (println "freeMemory  " (.freeMemory runtime))
@@ -62,10 +64,26 @@
  (.gc runtime)
  ;;(.halt runtime 1)
   )
-
+)
 ;;(new (MemoryNotificationInfo/MemoryNotificationInfo )
 ;;management/MemoryNotificationInfo
 
+
+(defn random_liquid_seedZ [globalsizeZ booster]
+   (doall
+   (let [r (java.util.Random. 12345)]
+     (loop [i 0 outlist ()]
+       (if (= i globalsizeZ)
+         outlist
+         (recur (inc i) (conj outlist (+ (* (float (.nextInt r 100)) 0.1) booster) )))))))    ;Could probably do this via a reduce function?
+
+(defn random_conectivity_seedZ [globalsizeZ]
+   (doall
+   (let [r (java.util.Random. 12345)]
+     (loop [i 0 outarray []]
+       (if (= i globalsizeZ)
+         outarray
+         (recur (inc i) (conj outarray (.nextInt r 64000) )))))))
 
 (println "done: loading utils")
 
