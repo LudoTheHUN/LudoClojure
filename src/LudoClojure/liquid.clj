@@ -125,6 +125,7 @@ debug_infobuff[gid]= random_value;
 
 (defrecord LiquidRecord [liquid_opencl_env
                          liquid_queue
+                         flipper      ;;atom that defines the double buffer behaviour
                          
                          liquidState1_a_buf
                          liquidState1_b_buf
@@ -137,17 +138,27 @@ debug_infobuff[gid]= random_value;
                         ]
   LiquidProtocol
 (flop [liquid]
-  (lg_enqueue-kernel ((:liquid_queue liquid) @(:liquid_opencl_env liquid)) (:progs @(:liquid_opencl_env liquid))
+ (let [flipper (:flipper liquid)
+       flip @flipper]
+  (do (swap! flipper (fn [x] (not x)))
+    (lg_enqueue-kernel ((:liquid_queue liquid) @(:liquid_opencl_env liquid)) (:progs @(:liquid_opencl_env liquid))
                      :flopLiquid
                      (:liquidsize liquid)   ;;globalsize
                      (:conectivity_buf liquid)
-                     (:liquidState1_a_buf liquid)
-                     (:liquidState1_b_buf liquid)
-                     (:liquidState2_a_buf liquid)
-                     (:liquidState2_b_buf liquid)
-                     (:debug_infobuff_buf liquid)
-                     (:connections connections)
-                  ))
+                    ; (if flip (:liquidState1_a_buf liquid) (:liquidState1_b_buf liquid))    ;;double buffer logic
+                    ; (if flip (:liquidState1_b_buf liquid) (:liquidState1_a_buf liquid))
+                    ; (if flip (:liquidState2_a_buf liquid) (:liquidState2_b_buf liquid))
+                    ; (if flip (:liquidState2_b_buf liquid) (:liquidState2_a_buf liquid))
+                    (:liquidState1_a_buf liquid)
+                    (:liquidState1_b_buf liquid)
+                    (:liquidState2_a_buf liquid)
+                    (:liquidState2_b_buf liquid)
+                    (:debug_infobuff_buf liquid)
+                    (:connections liquid)
+                  ))))
+
+(inject  [liquid input] "inject information into liquid")
+(readoff [liquid spec] "read the liquid state as specified by the spec")
 )
 
 
@@ -158,24 +169,27 @@ debug_infobuff[gid]= random_value;
    (let [{:keys [liquid_opencl_env liquid_queue liquidsize eta connections] 
                  :or 
                 {liquid_opencl_env cl-utils/opencl_env
-                 liquid_queue :queue
+                 liquid_queue :queue   ;;TODO  Make this similart to pp, add qeueu to opencl_env
                  liquidsize 64
                  eta (float 0.001)
                  connections 5
                    ;The default queue in the opencl_env
                  }
                 } options
-          liquidState1_a_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
+          liquidState1_a_buf  (doall (lg_wrap (:context @liquid_opencl_env) (utils/random_liquid_seedZ liquidsize 0.0) :float32-le))
           liquidState1_b_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
-          liquidState2_a_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
+          liquidState2_a_buf  (doall (lg_wrap (:context @liquid_opencl_env) (utils/random_liquid_seedZ liquidsize 1.0) :float32-le))
           liquidState2_b_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :float32-le))
           conectivity_buf     (doall (lg_wrap (:context @liquid_opencl_env) (utils/random_conectivity_seedZ liquidsize) :int32-le))
           debug_infobuff_buf  (doall (lg_create-buffer (:context @liquid_opencl_env) liquidsize :int32-le))
          ]
    (println liquidsize eta liquid_queue)
+   
    (LiquidRecord. 
                          liquid_opencl_env
                          liquid_queue
+                         (atom true)   ;flipper
+                         
                          liquidState1_a_buf
                          liquidState1_b_buf
                          liquidState2_a_buf
@@ -190,9 +204,19 @@ debug_infobuff[gid]= random_value;
 
 (quote
 (make_liquid {:liquidsize 32})
-(def myliquid (make_liquid {}))
+(utils/random_liquid_seedZ 343 0.0)
+
+(:flipper myliquid)
+  (keys myliquid)
+(lg_wrap (:context @cl-utils/opencl_env) (utils/random_conectivity_seedZ 64) :int32-le)
 )
 
+(def myliquid (make_liquid {:liquidsize (* 64 64 64)}))
+(time (do (dotimes [n 10000] (flop myliquid))  (lg_finish ((:liquid_queue myliquid) @cl-utils/opencl_env))))
+(:flipper myliquid)
+
+
+;;NOW WRITE TESTS!!!!
 
 
 ;(doall (lg_wrap (:context @opencl_env) (make_random_float_array size_of_alpha_needed -0.5 1) :float32-le))
