@@ -117,6 +117,7 @@ debug_infobuff[gid]= random_value;
 
 (defprotocol LiquidProtocol
   "Protocol for interacting with a liquid of a liquid state machine."
+(flip [liquid] "flips the flipper bit all double buffer state entries relate to")
 (flop    [liquid] "tick the liquid by one time step")
 (inject  [liquid input] "inject information into liquid")
 (readoff [liquid spec] "read the liquid state as specified by the spec")
@@ -135,24 +136,30 @@ debug_infobuff[gid]= random_value;
                          debug_infobuff_buf
                          connections
                          liquidsize
-                        ]
-  LiquidProtocol
+                        ])
+
+(extend-type LiquidRecord LiquidProtocol
+(flip [liquid] "flips the flipper bit all double buffer state entries relate to"
+  (let [flipper (:flipper liquid)]
+    (swap! flipper (fn [x] (not x)))))
+
 (flop [liquid]
  (let [flipper (:flipper liquid)
-       flip @flipper]
-  (do (swap! flipper (fn [x] (not x)))
+       flipbit @flipper]
+  (do (flip liquid)   ;;TODO think if this should no be on it's own in a dedicated protocol function to make the flip explicit outside
+  ;(do (swap! flipper (fn [x] (not x)))   ;;TODO think if this should no be on it's own in a dedicated protocol function to make the flip explicit outside
     (lg_enqueue-kernel ((:liquid_queue liquid) @(:liquid_opencl_env liquid)) (:progs @(:liquid_opencl_env liquid))
                      :flopLiquid
                      (:liquidsize liquid)   ;;globalsize
                      (:conectivity_buf liquid)
-                    ; (if flip (:liquidState1_a_buf liquid) (:liquidState1_b_buf liquid))    ;;double buffer logic
-                    ; (if flip (:liquidState1_b_buf liquid) (:liquidState1_a_buf liquid))
-                    ; (if flip (:liquidState2_a_buf liquid) (:liquidState2_b_buf liquid))
-                    ; (if flip (:liquidState2_b_buf liquid) (:liquidState2_a_buf liquid))
-                    (:liquidState1_a_buf liquid)
-                    (:liquidState1_b_buf liquid)
-                    (:liquidState2_a_buf liquid)
-                    (:liquidState2_b_buf liquid)
+                     (if flipbit (:liquidState1_a_buf liquid) (:liquidState1_b_buf liquid))    ;;double buffer logic
+                     (if flipbit (:liquidState1_b_buf liquid) (:liquidState1_a_buf liquid))
+                     (if flipbit (:liquidState2_a_buf liquid) (:liquidState2_b_buf liquid))
+                     (if flipbit (:liquidState2_b_buf liquid) (:liquidState2_a_buf liquid))
+                    ;(:liquidState1_a_buf liquid)
+                    ;(:liquidState1_b_buf liquid)
+                    ;(:liquidState2_a_buf liquid)
+                    ;(:liquidState2_b_buf liquid)
                     (:debug_infobuff_buf liquid)
                     (:connections liquid)
                   ))))
@@ -160,6 +167,7 @@ debug_infobuff[gid]= random_value;
 (inject  [liquid input] "inject information into liquid")
 (readoff [liquid spec] "read the liquid state as specified by the spec")
 )
+
 
 
 
@@ -212,9 +220,12 @@ debug_infobuff[gid]= random_value;
 )
 
 (def myliquid (make_liquid {:liquidsize (* 64 64 64)}))
-(time (do (dotimes [n 10000] (flop myliquid))  (lg_finish ((:liquid_queue myliquid) @cl-utils/opencl_env))))
-(:flipper myliquid)
+(time (do (dotimes [n 1000] (flop myliquid))  (lg_finish ((:liquid_queue myliquid) @cl-utils/opencl_env))))
+(flop myliquid)
 
+(:flipper myliquid)
+(flip myliquid)
+(:flipper myliquid)
 
 ;;NOW WRITE TESTS!!!!
 
