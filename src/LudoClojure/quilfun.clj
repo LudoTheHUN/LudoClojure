@@ -1,7 +1,9 @@
 (ns LudoClojure.quilfun
  ; (:use quil.core))
 (:use quil.core)
-(:use [LudoClojure.pperceptron]))  ;;TODO put down an as here
+(:use [LudoClojure.pperceptron])
+(:use [LudoClojure.liquid])
+)  ;;TODO put down an as here
 
 ;TODO
 ;lib for displaying pp's in quil
@@ -12,7 +14,7 @@
 
 (def pp0 (make_pp {:input_size 3
                    :outputs_size 2
-                   :pp_size 100
+                   :pp_size 6
                    :rho 2               ;;  accuracy to which pp should learn, 1 means give back a binary 1,-1 output, 2means 1,0,-1, assuming pp is of an odd size etc.
                    :eta (float 0.01)    ;;  learning_rate
                    :gama (float 0.1)    ;;  margin around zero              ;0.4
@@ -251,21 +253,52 @@
 
 
 (defn writoutstuff [txt x y width height]
-   (fill 250 0 50)
+   (fill 400 0 50)
    (rect x y width height)
    (fill 255)
    (text (str txt) (+ x 3) (+ 10 y) )
    )
 
 
+
+
+
+; (def quil_liquid (make_liquid {:liquidsize (* 500) :connections 3}))   ;;interesting
+(def quil_liquid (make_liquid {:liquidsize (* 798 ) :connections 2}))   ;;interesting
+
+(defn drap_liquid [] 
+   (do 
+    (flop quil_liquid)
+    ;(point @xpoint (random (height)))
+   (let [liquid_state (readoff_speced quil_liquid [0 500])]
+     (do ;(println liquid_state)
+         (doall
+           (map 
+             (fn [x] 
+                (do 
+                    (let [liquidvalue (* (nth liquid_state x) 25)]
+                      (stroke liquidvalue liquidvalue liquidvalue)
+                      ;(point (- @xpoint 10) x)
+                      ;(point 400 x)
+                      (line (+ @xpoint 20) x 1900 x)
+                      )))
+             (range 500))))
+    )
+   ))
+
+
+
+
 ;; START QUIL DRAWING
 
 (defn setup []
   (smooth)                          ;;Turn on anti-aliasing
-  (frame-rate 60)                    ;;Set framerate to 1 FPS
+  (frame-rate 1000)                    ;;Set framerate to 1 FPS
   (background 100))                 ;;Set the background colour to
                                     ;;  a nice shade of grey.
        ;;Draw a circle at x y with the correct diameter
+
+
 
 (defn draw []
   (clearscreen)
@@ -284,21 +317,22 @@
    (mouse_control_atom_x gama)
 
 
+   ;;liquid drawing
+   (drap_liquid)
    
-   
-   (writoutstuff (str @frmecounter)      0 0  100 10)
-   (writoutstuff (str @xpoint)           0 10 100 10)
+   (writoutstuff (str "@frmecounter " @frmecounter)      0 0  150 10)
+   (writoutstuff (str "@xpoint" @xpoint)                 0 10 150 10)
    
    
    (writoutstuff (str "Acorr: " (count (filter true? (map (fn [x] (nth x 3)) (all_answers pp_answers)))))
-                                         0 (- (height) 70) 100 10)
+                                         0 (- (height) 70) 150 10)
    (writoutstuff (str "Q's   : " (count pp_answers))
-                                         0 (- (height) 60) 100 10)
-   (writoutstuff (str "gama is: " @gama) 0 (- (height) 50) 100 10)
-   (writoutstuff (mouse-state)           0 (- (height) 40) 100 10)
-   (writoutstuff (mouse-y)               0 (- (height) 30) 100 10)
-   (writoutstuff (mouse-x)               0 (- (height) 20) 100 10)
-   (writoutstuff (mouse-button)          0 (- (height) 10) 100 10)
+                                         0 (- (height) 60) 150 10)
+   (writoutstuff (str "gama is: " @gama) 0 (- (height) 50) 150 10)
+   (writoutstuff (mouse-state)           0 (- (height) 40) 150 10)
+   (writoutstuff (mouse-y)               0 (- (height) 30) 150 10)
+   (writoutstuff (mouse-x)               0 (- (height) 20) 150 10)
+   (writoutstuff (mouse-button)          0 (- (height) 10) 150 10)
    
  ;  (draw_answers many_answers_done)
    
