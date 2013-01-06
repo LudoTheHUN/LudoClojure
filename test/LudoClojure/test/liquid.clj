@@ -19,14 +19,69 @@
   
 
 
-; (def myliquid (make_liquid {:liquidsize (* 64 64 1) :connections 13}))
+; (def myliquid (make_liquid {:liquidsize (* 64 64 64) :connections 13}))
 
-(def myliquid (make_liquid {:liquidsize (* 64 64 64) :connections 13}))
-(:liquidsize myliquid)
 
-(time (do (time (dotimes [n 100] (flop myliquid)))  ;(lg_finish ((:liquid_queue myliquid) @cl-utils/opencl_env))
-          (time (count (filter  (fn [x] (>= x 10.0)) (readoff_speced myliquid [0 1000]))) )
-        ))
+(defn benchliquid [myliquid flopstodo]
+(let [flopstodo flopstodo
+      startnanotime (System/nanoTime)]
+ (time (do  (time (dotimes [n flopstodo] (flop myliquid)))  ;(lg_finish ((:liquid_queue myliquid) @cl-utils/opencl_env))
+            (println (time (count (filter  (fn [x] (>= x 10.0))  (readoff_speced myliquid [0 10])))))
+            ;;Billion synaptic updates per second
+             (/ (* flopstodo 1.0
+                   (:liquidsize myliquid) 
+                   (:connections myliquid))
+                (- (System/nanoTime) startnanotime)  ;;time taken
+               )))))
+
+
+(def myliquid (make_liquid {:liquidsize (* 64 64 64) :connections 100}))
+;(def myliquid (make_liquid {:liquidsize 262143 :connections 63}))
+
+(benchliquid myliquid 1000)
+(readoff_speced myliquid [0 100])
+
+(defn benchresults [testspecs]
+(doall (map (fn [x] (conj x {:testBflopspersec (benchliquid 
+                                                   (make_liquid {:liquidsize (:size x) :connections (:conections x)}) 
+                                                   (:cycles x))}))
+             testspecs)))
+
+
+(def bresults
+(benchresults
+     [
+      {:size (* 64 64 64) :conections 10  :cycles 1000}
+      {:size (* 64 64 64) :conections 20  :cycles 1000}
+      {:size (* 64 64 64) :conections 30  :cycles 1000}
+      {:size (* 64 64 64) :conections 40  :cycles 1000}
+      {:size (* 64 64 64) :conections 50  :cycles 1000}
+      {:size (* 64 64 64) :conections 60  :cycles 1000}
+      {:size (* 64 64 64) :conections 70  :cycles 1000}
+      {:size (* 64 64 64) :conections 80  :cycles 1000}
+      {:size (* 64 64 64) :conections 90  :cycles 1000}
+      {:size (* 64 64 64) :conections 100 :cycles 1000}
+      {:size (* 64 64 64) :conections 110 :cycles 1000}
+      {:size (* 64 64 64) :conections 120 :cycles 1000}
+      {:size (* 64 64 64) :conections 130 :cycles 1000}
+      {:size (* 64 64 64) :conections 140 :cycles 1000}
+      {:size (* 64 64 64) :conections 150 :cycles 1000}
+      {:size (* 64 64 64) :conections 160 :cycles 1000}
+      ]))
+
+
+(pprint bresults)
+
+
+(benchliquid myliquid 1000)
+(make_liquid {:liquidsize (* 64 64 64) :connections 100})
+
+(let [starttime (System/nanoTime)]
+(do  (Thread/sleep 1000)
+    (/ (- (System/nanoTime) starttime ) 1000000000.0)))
+ 
+
+ 
 
 (time (do (dotimes [n 300000] 
       (let [liquidstate (readoff_speced myliquid [0 1000])]

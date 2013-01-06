@@ -12,10 +12,24 @@
 (quote
 LSM TODOs
 
+new neuron model as per "http://www.izhikevich.org/publications/spikes.htm"
+
+
+
+
+DONE Use quil to visualise state
+make parameters optional so that they can be hand tweaked to something good
+make parameters setable within quil visualisation
+create machanisim to correctly inject information
+attach pp readout and learn an output
+develop tests to show simple memory
+develop tests to show generalisation
+;add 2D topology
+;add 3D topology
+
 DONE Get modeled neurons more realistic as per calc model
 DONE Note, this could take forever, need tools to manage this... Tune parameters to somethig realistic, spike should be much more then typical potential
-Look at storm, we need to create many liquids on the fly, just by passing a name of this liquid, create a DSL for creating them... what would be an idomatic way of doing this? Answer defrecord and defprotocol
-
+NOGO Look at storm, we need to create many liquids on the fly, just by passing a name of this liquid, create a DSL for creating them... what would be an idomatic way of doing this? Answer defrecord and defprotocol
 DONE Thing about output neurons, pdelta rule, parallel perceptrons, their GPU implementation....Need to create many on the fly.... DSL again? Answer pp done properly.
 DONE implement p-delta rule
 Set up a test case for testing, test data to inject... real vs procedurally created?
@@ -58,10 +72,8 @@ __kernel void flopLiquid(
 
 
 if (liquidState1 > liquidState2) {               //If we have a spike, then.... very little to do...
-
-liquidState1_b[gid] = 10.0;                      //Action Potential getting set to the spike level
-liquidState2_b[gid] = 100.0;                     //Activation Potential getting set to the spike level, making another spike very unlikely untill it decays off
-
+   liquidState1_b[gid] = 10.0;                      //Action Potential getting set to the spike level
+   liquidState2_b[gid] = 100.0;                     //Activation Potential getting set to the spike level, making another spike very unlikely untill it decays off
 }
 else  {
     for(iatom = 0; iatom < connections; iatom+=1 ) {
@@ -76,17 +88,17 @@ else  {
 //Major refactor Jan 2012
 
         if (inhibition_chooser >= 20) {
-          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.25);    //action potential getting subtracted or added based on Action Potential of connected neurons
+          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.15);    //action potential getting subtracted or added based on Action Potential of connected neurons
           }
         else  {
-          liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.15);    //action potential getting subtracted or added based on Action Potential of connected neurons
+          liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.30);    //this is inhibition, action potential getting subtracted or added based on Action Potential of connected neurons
           }
          }   // Closes the for loop over iatom , aka synapses
 
      // TODO: Speed optimisations possible here by preventing writes when values are not changing, (when just at the asimptotes).
 
-     liquidState1_b[gid] = liquidState1 * 0.5;                                  // Writing out the Action Potential , which is reduced by the decay rate    TODO: could make this a parameter
-     liquidState2_b[gid] = ((liquidState2 - 1.0) * 0.6 ) + 1.0;                 // Writing out the Activation Potential, Decaying it by 0.6, asymptoting it to 1.0.   TODO: long term other slower neuron dynamics can be added here by making the decay rate and assimptote represent neuronal adaptations to its typical activation rates.
+     liquidState1_b[gid] = liquidState1 * 0.1;                                  // Writing out the Action Potential , which is reduced by the decay rate    TODO: could make this a parameter
+     liquidState2_b[gid] = ((liquidState2 - 1.0) * 0.6 ) + 1.0;                 // Writing out the Activation Potential, Decaying it by 0.6, asymptoting it to 2.0.   TODO: long term other slower neuron dynamics can be added here by making the decay rate and assimptote represent neuronal adaptations to its typical activation rates.
                                                                                 //TODO: Maas made the decay rates different if the neuron was exitory vs inhibitory, that's for another refactor...
 
 }  //Closing the non spike firing else
