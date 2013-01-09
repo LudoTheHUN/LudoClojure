@@ -264,14 +264,20 @@
 
 
 ; (def quil_liquid (make_liquid {:liquidsize (* 500) :connections 3}))   ;;interesting
-(def quil_liquid (make_liquid {:liquidsize (* 64 64 64 ) :connections 100}))   ;;interesting
+(def quil_liquid (make_liquid {:liquidsize (* 64 64) :connections 100}))   ;;interesting
+;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 3}))   ;;interesting
+;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 200}))   ;;interesting
+;(def quil_liquid (make_liquid {:liquidsize (* 64 64 64) :connections 0}))   ;;interesting
 
 (readoff_speced quil_liquid [0 20])
-
+;;  (inject quil_liquid (vec (repeat (* 64 6) 10.0)))
+;;  (inject quil_liquid (vec (repeat (* 64 32) 0.0)))
+;;  (inject quil_liquid (vec (repeat (* 64) 10.0)))
 
 (defn drap_liquid [] 
    (do 
-    (flop (conj quil_liquid {:connections 115}))
+    (flop (conj quil_liquid {:connections 109}))
+    ;(inject quil_liquid (vec (repeat (* 64) 10.0)))
     ;(point @xpoint (random (height)))
    (let [liquid_state (readoff_speced quil_liquid [0 1000])]
      (do ;(println liquid_state)
@@ -288,8 +294,6 @@
              (range 1000))))
     )
    ))
-
-
 
 
 ;; START QUIL DRAWING

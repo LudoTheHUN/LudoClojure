@@ -87,11 +87,11 @@ else  {
 
 //Major refactor Jan 2012
 
-        if (inhibition_chooser >= 20) {
-          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.15);    //action potential getting subtracted or added based on Action Potential of connected neurons
+        if (inhibition_chooser >= 17) {
+          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.14);    //action potential getting subtracted or added based on Action Potential of connected neurons
           }
         else  {
-          liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.30);    //this is inhibition, action potential getting subtracted or added based on Action Potential of connected neurons
+          liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.31);    //this is inhibition, action potential getting subtracted or added based on Action Potential of connected neurons
           }
          }   // Closes the for loop over iatom , aka synapses
 
@@ -178,7 +178,24 @@ debug_infobuff[gid]= gid_to_read;
                     (:connections liquid)
                   ))))
 
-(inject  [liquid input] "inject information into liquid")
+(inject  [liquid input]
+ "input is a vector or an  :float32-le calx buffer
+ TODO, add vec overflow safey
+ TODO  add destination parameter options?
+ TODO make flipflop aware"
+ (let [buf_to_inject 
+       (cond 
+         (cl-utils/is_buffer? input)
+           input
+         (vector? input)
+           (doall (lg_wrap (:context @(:liquid_opencl_env liquid)) (map float input) :float32-le)))]
+   (lg_enqueue-kernel ((:liquid_queue liquid) @(:liquid_opencl_env liquid)) (:progs @(:liquid_opencl_env liquid))
+                            :copyFloatXtoY
+                            (cl-utils/buf_elements buf_to_inject) buf_to_inject (:liquidState1_a_buf liquid))
+   (lg_enqueue-marker (@(:liquid_opencl_env liquid)(:liquid_queue liquid)))
+))
+
+
 
 (readoff_speced [liquid spec] "read the liquid state as specified by the spec"
   ;;TODO make :pp_answer_buf the default read out
@@ -252,8 +269,10 @@ debug_infobuff[gid]= gid_to_read;
 
 @(lg_enqueue-read (:liquidState1_b_buf myliquid) ((:liquid_queue myliquid) @(:liquid_opencl_env myliquid)))
 
-@(lg_enqueue-read (:liquidState1_b_buf myliquid) ((:liquid_queue myliquid) @(:liquid_opencl_env myliquid))   [4 10])
 
+@(lg_enqueue-read (:liquidState1_a_buf myliquid) ((:liquid_queue myliquid) @(:liquid_opencl_env myliquid)))
+(inject myliquid  [45 34 23])
+@(lg_enqueue-read (:liquidState1_a_buf myliquid) ((:liquid_queue myliquid) @(:liquid_opencl_env myliquid)))
 
 
 )
@@ -317,7 +336,7 @@ else  {
 //Major refactor Jan 2012
 
         if (inhibition_chooser >= 20) {
-          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.25);    //action potential getting subtracted or added based on Action Potential of connected neurons
+          liquidState1 = liquidState1 + (liquidState1_a[gid_to_read] * 0.29);    //action potential getting subtracted or added based on Action Potential of connected neurons
           }
         else  {
           liquidState1 = liquidState1 - (liquidState1_a[gid_to_read] * 0.15);    //action potential getting subtracted or added based on Action Potential of connected neurons

@@ -51,27 +51,36 @@
 (def bresults
 (benchresults
      [
-      {:size (* 64 64 64) :conections 10  :cycles 1000}
-      {:size (* 64 64 64) :conections 20  :cycles 1000}
-      {:size (* 64 64 64) :conections 30  :cycles 1000}
-      {:size (* 64 64 64) :conections 40  :cycles 1000}
-      {:size (* 64 64 64) :conections 50  :cycles 1000}
-      {:size (* 64 64 64) :conections 60  :cycles 1000}
-      {:size (* 64 64 64) :conections 70  :cycles 1000}
-      {:size (* 64 64 64) :conections 80  :cycles 1000}
-      {:size (* 64 64 64) :conections 90  :cycles 1000}
-      {:size (* 64 64 64) :conections 100 :cycles 1000}
-      {:size (* 64 64 64) :conections 110 :cycles 1000}
-      {:size (* 64 64 64) :conections 120 :cycles 1000}
-      {:size (* 64 64 64) :conections 130 :cycles 1000}
-      {:size (* 64 64 64) :conections 140 :cycles 1000}
-      {:size (* 64 64 64) :conections 150 :cycles 1000}
-      {:size (* 64 64 64) :conections 160 :cycles 1000}
+      {:size (* 64 64 64) :conections 10  :cycles 100}
+      {:size (* 64 64 64) :conections 20  :cycles 100}
+      {:size (* 64 64 64) :conections 30  :cycles 100}
+      {:size (* 64 64 64) :conections 40  :cycles 100}
+      {:size (* 64 64 64) :conections 50  :cycles 100}
+      {:size (* 64 64 64) :conections 60  :cycles 100}
+      {:size (* 64 64 64) :conections 70  :cycles 100}
+      {:size (* 64 64 64) :conections 80  :cycles 100}
+      {:size (* 64 64 64) :conections 90  :cycles 100}
+      {:size (* 64 64 64) :conections 100 :cycles 100}
+      {:size (* 64 64 64) :conections 110 :cycles 100}
+      {:size (* 64 64 64) :conections 120 :cycles 100}
+      {:size (* 64 64 64) :conections 130 :cycles 100}
+      {:size (* 64 64 64) :conections 140 :cycles 100}
+      {:size (* 64 64 64) :conections 150 :cycles 100}
+      {:size (* 64 64 64) :conections 160 :cycles 100}
+      ]))
+
+
+(def bresults2
+(benchresults
+     [
+      ;{:size (* 64 64 64) :conections 100 :cycles 100}
+      {:size (* 64 64 64 3) :conections 100 :cycles 100}
+
       ]))
 
 
 (pprint bresults)
-
+(pprint bresults2)
 
 (benchliquid myliquid 1000)
 (make_liquid {:liquidsize (* 64 64 64) :connections 100})
